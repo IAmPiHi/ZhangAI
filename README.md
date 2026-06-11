@@ -5,7 +5,7 @@ English | **[繁體中文](README.zh-TW.md)**
 > A local LLM console with a cooler interface — like Ollama, but with built-in vision, tool calling, multi-AI debate, web search, and long-term memory.
 > Pure llama.cpp + Python standard library + a single-file frontend. No frameworks, no database, zero cloud dependencies.
 
-![main](docs/screenshot-main.png)
+![main](docs/main.png)
 
 ## ✨ Features
 
@@ -55,6 +55,8 @@ Quantization guide for the default model [HauhauCS/Qwen3.6-35B-A3B-Uncensored-Ha
 | Q4_K_M | 21.2 GB | ~24 GB |
 | Q5_K_P | 28 GB | ~32 GB |
 
+> ⚠️ **About the default model:** it is an *uncensored* community finetune with very few built-in refusals — it may produce content that mainstream assistants would decline. It is intended for local, personal use; **you are solely responsible for how you use it and for complying with your local laws.** Prefer a safety-tuned model? Just drop any standard GGUF into `model/main.gguf` instead.
+
 ## 🗂 Project Layout
 
 ```
@@ -85,9 +87,9 @@ def run(args):
 
 ## 🖼 Screenshots
 
-| Main UI | /think debate | /search |
-|---|---|---|
-| ![main](docs/screenshot-main.png) | ![think](docs/screenshot-think.png) | ![search](docs/screenshot-search.png) |
+![main](docs/main.png)
+
+*(more screenshots — /think debate, /search — coming soon, see [TODO](TODO.md))*
 
 ## 🤝 Contributing
 
@@ -99,8 +101,4 @@ def run(args):
 
 ## 📄 License
 
-[ZNC-1.0](LICENSE) — free for **non-commercial** use; copy, modify, and redistribute freely, but the original author credit **Chris Zhang** must remain visible in the front-end UI, and modified versions must keep this license. Contact the author for commercial licensing.
-
----
-
-<p align="center">by <b>Chris Zhang</b> © 2026 · All Rights Reserved</p>
+[ZNC-1.0](LICENSE) — fr

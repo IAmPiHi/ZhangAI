@@ -5,7 +5,7 @@
 > 一個介面更酷的本地 LLM 主控台 — 類 Ollama,但內建視覺辨識、工具調用、多 AI 辯論、網路搜尋與長期記憶。
 > 純 llama.cpp + Python 標準庫 + 單檔前端,無框架、無資料庫、零雲端依賴。
 
-![main](docs/screenshot-main.png)
+![main](docs/main.png)
 
 ## ✨ 特色
 
@@ -53,6 +53,8 @@
 | Q4_K_M | 21.2 GB | ~24 GB |
 | Q5_K_P | 28 GB | ~32 GB |
 
+> ⚠️ **關於預設模型:**這是社群微調的 *uncensored(無限制)* 版本,內建拒答極少,可能生成主流助手會拒絕的內容。僅供本地個人使用;**使用方式與遵守當地法律完全由使用者自行負責。**想要有安全限制的模型,把任何標準 GGUF 放進 `model/main.gguf` 即可。
+
 ## 🗂 專案結構
 
 ```
@@ -83,9 +85,9 @@ def run(args):
 
 ## 🖼 截圖
 
-| 主介面 | /think 辯論 | /search 搜尋 |
-|---|---|---|
-| ![main](docs/screenshot-main.png) | ![think](docs/screenshot-think.png) | ![search](docs/screenshot-search.png) |
+![main](docs/main.png)
+
+*(更多截圖 — /think 辯論、/search 搜尋 — 即將補上,見 [TODO](TODO.md))*
 
 ## 🤝 參與貢獻
 
@@ -97,8 +99,4 @@ def run(args):
 
 ## 📄 授權
 
-[ZNC-1.0](LICENSE) — **非商業**使用免費;可拷貝、可修改、可再散布,但必須在前端介面可見處保留原作者署名 **Chris Zhang**,且修改版需採用相同授權。商業使用請聯繫作者。
-
----
-
-<p align="center">by <b>Chris Zhang</b> © 2026 · All Rights Reserved</p>
+[ZNC-1.0](LICENSE) — **非商業**使用免費
