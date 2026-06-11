@@ -4,13 +4,13 @@ from _common import resolve
 
 SKILL = {
     "name": "docx_create",
-    "desc": "建立新的 Word(.docx) 文件,content 以換行分段",
-    "params": {"path": "輸出路徑", "content": "文件內容"},
+    "desc": "Create a new Word (.docx) file; newlines in content become paragraphs",
+    "params": {"path": "output path", "content": "document text"},
 }
 
 
 def run(args):
-    p = resolve(args.get("path", "新文件.docx"))
+    p = resolve(args.get("path", "new_document.docx"))
     if not str(p).lower().endswith(".docx"):
         p = p.with_suffix(".docx")
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -38,4 +38,4 @@ def run(args):
         z.writestr("[Content_Types].xml", ctypes)
         z.writestr("_rels/.rels", rels)
         z.writestr("word/document.xml", doc)
-    return {"ok": True, "text": f"已建立 Word 文件: {p}"}
+    return {"ok": True, "text": f"Word documen

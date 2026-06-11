@@ -228,7 +228,7 @@ kbd{font-family:var(--mono);background:var(--panel2);border:1px solid var(--bord
     <div class="card">
       <div class="logo"><div class="mark">◆</div>
         <div><b>ZHANGAI</b><small>LOCAL AI CONSOLE</small></div></div>
-      <div class="status"><div class="dot" id="dot"></div><span id="statusTxt">連線中…</span></div>
+      <div class="status"><div class="dot" id="dot"></div><span id="statusTxt" data-i18n="stConnecting">Connecting…</span></div>
       <div id="modelName">—</div>
       <div style="height:12px"></div>
       <button class="btn full" id="openSettings" data-i18n="btnSettings">⚙ 設定</button>
@@ -251,7 +251,7 @@ kbd{font-family:var(--mono);background:var(--panel2);border:1px solid var(--bord
       </div>
     </div>
     <div id="chat">
-      <div class="empty" id="emptyHint"></div>
+      <div class="empty" id="emptyHint" data-i18n-html="emptyHint"></div>
     </div>
     <div class="composer">
       <div id="previews"></div>
@@ -275,8 +275,8 @@ kbd{font-family:var(--mono);background:var(--panel2);border:1px solid var(--bord
       <section>
         <h3>Language / 語言</h3>
         <div class="provRow">
-          <label><input type="radio" name="lang" value="zh" checked> 中文</label>
-          <label><input type="radio" name="lang" value="en"> English</label>
+          <label><input type="radio" name="lang" value="en" checked> English</label>
+          <label><input type="radio" name="lang" value="zh"> 中文</label>
         </div>
       </section>
       <section>
@@ -322,7 +322,7 @@ kbd{font-family:var(--mono);background:var(--panel2);border:1px solid var(--bord
           <div class="desc"><b data-i18n="memRT">使用使用者資料</b><span data-i18n="memRD">對話時 AI 讀取 memory.json 作為背景知識</span></div>
           <label class="toggle"><input type="checkbox" id="memRead"><i></i></label>
         </div>
-        <div id="memList">(尚無記憶)</div>
+        <div id="memList" data-i18n="memEmpty">(no memories yet)</div>
         <button class="btn danger" id="memClear" data-i18n="btnMemClear">清除全部記憶</button>
       </section>
       <section>
@@ -348,7 +348,7 @@ let controllers = [], busy = false, stopAll = false;
 /* ════ 設定 ════ */
 const S = Object.assign({provider:'local', geminiKey:'', geminiModel:'', dsKey:'', dsModel:'',
   temp:0.7, topp:0.95, maxt:4096, sys:'', memWrite:false, memRead:false, parallelThink:false,
-  lang:'zh'},
+  lang:'en'},   // default English; switchable in Settings
   JSON.parse(localStorage.getItem('zh_settings')||'{}'));
 function saveS(){ localStorage.setItem('zh_settings', JSON.stringify(S)); }
 
@@ -1256,8 +1256,4 @@ applySettings();
 applyLang();
 refreshChatList();
 /* ?chat=編號 → 直接開啟該對話(供生成中開新視窗用) */
-const urlChat = new URLSearchParams(location.search).get('chat');
-if(urlChat) loadChat(urlChat);
-</script>
-</body>
-</html>
+c

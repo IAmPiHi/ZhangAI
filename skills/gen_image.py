@@ -9,16 +9,16 @@ SD_API = "http://127.0.0.1:7860"   # Stable Diffusion WebUI (A1111), start with 
 
 SKILL = {
     "name": "gen_image",
-    "desc": "用 Stable Diffusion 生成圖片(需另外安裝 A1111 WebUI 並以 --api 啟動)",
-    "params": {"prompt": "英文圖片描述", "negative_prompt": "(選填)",
-               "width": "(選填)", "height": "(選填)"},
+    "desc": "Generate an image with Stable Diffusion (requires A1111 WebUI running with --api)",
+    "params": {"prompt": "image description in English", "negative_prompt": "(optional)",
+               "width": "(optional)", "height": "(optional)"},
 }
 
 
 def run(args):
     prompt = args.get("prompt", "")
     if not prompt:
-        return {"ok": False, "text": "缺少 prompt"}
+        return {"ok": False, "text": "missing 'prompt'"}
     payload = json.dumps({
         "prompt": prompt,
         "negative_prompt": args.get("negative_prompt", ""),
@@ -34,9 +34,9 @@ def run(args):
         img = base64.b64decode(data["images"][0])
         name = f"img-{int(time.time())}.png"
         (GEN_DIR / name).write_bytes(img)
-        return {"ok": True, "text": f"圖片已生成並存於 generated/{name}",
+        return {"ok": True, "text": f"image generated: generated/{name}",
                 "image_url": f"/generated/{name}"}
     except Exception as e:
         return {"ok": False,
-                "text": f"無法連到 Stable Diffusion WebUI ({SD_API})。"
-                        f"請先安裝並以 --api 參數啟動 A1111。錯誤: {e}"}
+                "text": f"cannot reach Stable Diffusion WebUI ({SD_API}). "
+                        f"Install A1111 and start it with --api. Error: {e}"}
