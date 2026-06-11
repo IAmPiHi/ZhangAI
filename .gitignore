@@ -1,0 +1,19 @@
+# ── user data (never commit) ──
+chats/
+memory.json
+generated/
+
+# ── large binaries (downloaded by setup scripts) ──
+model/*
+!model/.gitkeep
+llama/*
+!llama/.gitkeep
+
+# ── auto-generated ──
+skills/skills.json
+__pycache__/
+*.pyc
+
+# ── OS noise ──
+Thumbs.db
+.DS_Store

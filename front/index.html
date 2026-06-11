@@ -1,0 +1,1263 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZHANGAI · Local AI Console</title>
+<style>
+:root{
+  --bg:#07090f; --panel:rgba(18,22,34,.72); --panel2:rgba(28,34,52,.6);
+  --border:rgba(120,150,255,.14); --text:#dfe6f5; --dim:#7b86a3;
+  --neon1:#6c5cff; --neon2:#00d4ff; --neon3:#ff4ecd; --neon4:#ffb020; --neon5:#2bdb84;
+  --grad:linear-gradient(135deg,var(--neon1),var(--neon2));
+  --radius:14px; --mono:'Cascadia Code','Consolas',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:'Segoe UI','Microsoft JhengHei',sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
+/* ── 動態背景:極光 + 粒子 + 網格 ── */
+.bg{position:fixed;inset:0;z-index:0;pointer-events:none}
+.bg::before,.bg::after{content:'';position:absolute;width:60vmax;height:60vmax;border-radius:50%;filter:blur(120px);opacity:.18;animation:drift 24s ease-in-out infinite alternate}
+.bg::before{background:var(--neon1);top:-20vmax;left:-10vmax}
+.bg::after{background:var(--neon2);bottom:-25vmax;right:-12vmax;animation-delay:-12s}
+@keyframes drift{50%{transform:translate(4vmax,8vmax) scale(1.2)}to{transform:translate(10vmax,2vmax) scale(.95)}}
+#particles{position:fixed;inset:0;z-index:0;pointer-events:none}
+.grid{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:linear-gradient(rgba(110,140,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(110,140,255,.05) 1px,transparent 1px);
+  background-size:42px 42px;mask-image:radial-gradient(ellipse at 50% 40%,black 30%,transparent 75%);
+  animation:gridMove 18s linear infinite}
+@keyframes gridMove{to{background-position:42px 42px,42px 42px}}
+/* ── layout ── */
+.app{position:relative;z-index:1;display:flex;height:100vh;gap:14px;padding:14px}
+.side{width:300px;min-width:300px;display:flex;flex-direction:column;gap:14px;overflow-y:auto}
+.main{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--panel);
+  border:1px solid var(--border);border-radius:var(--radius);backdrop-filter:blur(18px);overflow:hidden;position:relative}
+.main::before{content:'';position:absolute;inset:-1px;border-radius:var(--radius);padding:1px;pointer-events:none;opacity:0;transition:.6s;
+  background:conic-gradient(from var(--a,0deg),var(--neon1),var(--neon2),var(--neon3),var(--neon1));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+.main.generating::before{opacity:1;animation:spin 3s linear infinite}
+@property --a{syntax:'<angle>';initial-value:0deg;inherits:false}
+@keyframes spin{to{--a:360deg}}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px;backdrop-filter:blur(18px);
+  transition:transform .25s,box-shadow .25s,border-color .25s}
+.card:hover{transform:translateY(-2px);border-color:rgba(120,150,255,.3);box-shadow:0 8px 26px rgba(0,0,0,.35)}
+.card h3{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--dim);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.card h3::after{content:'';flex:1;height:1px;background:var(--border)}
+/* ── logo ── */
+.logo{display:flex;align-items:center;gap:12px}
+.logo .mark{width:40px;height:40px;border-radius:11px;background:var(--grad);display:grid;place-items:center;
+  font-weight:800;font-size:20px;color:#fff;box-shadow:0 0 22px rgba(108,92,255,.55);animation:markPulse 4s ease-in-out infinite}
+@keyframes markPulse{50%{box-shadow:0 0 34px rgba(0,212,255,.7);transform:rotate(4deg)}}
+.logo b{font-size:17px;letter-spacing:.26em;background:linear-gradient(110deg,var(--neon1) 20%,var(--neon2) 40%,#fff 50%,var(--neon2) 60%,var(--neon3) 80%);
+  background-size:220% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shimmer 5s linear infinite}
+@keyframes shimmer{to{background-position:-220% 0}}
+.logo small{display:block;color:var(--dim);font-size:10px;letter-spacing:.12em}
+.status{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12px;color:var(--dim)}
+.dot{width:9px;height:9px;border-radius:50%;background:#ff5566;transition:.3s}
+.dot.on{background:#2bdb84;box-shadow:0 0 10px #2bdb84;animation:pulse 2s infinite}
+@keyframes pulse{50%{box-shadow:0 0 18px #2bdb84}}
+#modelName{font-family:var(--mono);font-size:11px;color:var(--neon2);word-break:break-all;margin-top:6px}
+/* ── inputs ── */
+.param{margin-bottom:14px}
+.param label{display:flex;justify-content:space-between;font-size:12px;color:var(--dim);margin-bottom:6px}
+.param label output{font-family:var(--mono);color:var(--neon2)}
+input[type=range]{width:100%;appearance:none;height:4px;border-radius:2px;background:rgba(120,150,255,.18);outline:none}
+input[type=range]::-webkit-slider-thumb{appearance:none;width:15px;height:15px;border-radius:50%;background:var(--grad);
+  box-shadow:0 0 10px rgba(108,92,255,.7);cursor:pointer;transition:transform .15s}
+input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.3)}
+textarea{width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:10px;
+  color:var(--text);padding:10px;font-size:13px;resize:vertical;outline:none;font-family:inherit;transition:border-color .2s,box-shadow .2s}
+textarea:focus{border-color:var(--neon1);box-shadow:0 0 16px rgba(108,92,255,.25)}
+.btn{position:relative;overflow:hidden;display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--border);
+  background:var(--panel2);color:var(--text);border-radius:10px;padding:9px 14px;font-size:13px;cursor:pointer;transition:.15s}
+.btn:hover{border-color:var(--neon1);box-shadow:0 0 14px rgba(108,92,255,.35);transform:translateY(-1px)}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--grad);border:none;font-weight:600;color:#fff;background-size:160% 160%;animation:gradShift 6s ease infinite}
+@keyframes gradShift{50%{background-position:100% 100%}}
+.btn.danger:hover{border-color:#ff5566;box-shadow:0 0 14px rgba(255,85,102,.35)}
+.btn.full{width:100%}
+.ripple{position:absolute;border-radius:50%;background:rgba(255,255,255,.35);transform:scale(0);animation:rip .55s ease-out forwards;pointer-events:none}
+@keyframes rip{to{transform:scale(3);opacity:0}}
+/* ── chat list ── */
+#chatList{display:flex;flex-direction:column;gap:6px;max-height:340px;overflow-y:auto}
+.chatItem{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:9px;border:1px solid transparent;
+  cursor:pointer;color:var(--dim);transition:.18s}
+.chatItem .info{flex:1;min-width:0}
+.chatItem .t{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.chatItem .d{font-size:10px;font-family:var(--mono);color:var(--dim);margin-top:2px}
+.chatItem:hover{background:var(--panel2);transform:translateX(4px)}
+.chatItem.active{border-color:rgba(108,92,255,.5);background:rgba(108,92,255,.12)}
+.chatItem .del{visibility:hidden;border:none;background:none;color:var(--dim);cursor:pointer;font-size:13px;padding:2px}
+.chatItem:hover .del{visibility:visible}
+.chatItem .del:hover{color:#ff5566;transform:scale(1.2)}
+.listEmpty{font-size:12px;color:var(--dim);text-align:center;padding:10px 0}
+#folderState{font-size:11px;color:var(--dim);margin-top:8px}
+/* ── stats ── */
+.statsBar{display:flex;gap:18px;font-family:var(--mono);font-size:11.5px;color:var(--dim)}
+.statsBar b{color:var(--neon2);font-size:13px;transition:text-shadow .2s}
+.statsBar b.hot{text-shadow:0 0 12px var(--neon2)}
+/* ── chat ── */
+.chatHead{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);position:relative;overflow:hidden}
+.chatHead::after{content:'';position:absolute;bottom:0;left:-30%;width:30%;height:1px;
+  background:linear-gradient(90deg,transparent,var(--neon2),transparent);animation:scan 4s linear infinite}
+@keyframes scan{to{left:130%}}
+.chatHead .title{font-size:14px;font-weight:600;letter-spacing:.05em}
+.chatHead .spacer{flex:1}
+#chat{flex:1;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:18px}
+.msg{max-width:78%;animation:rise .35s cubic-bezier(.2,.9,.3,1.2)}
+@keyframes rise{from{opacity:0;transform:translateY(14px) scale(.97)}}
+.msg .who{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);margin-bottom:6px}
+.msg .bubble{padding:13px 16px;border-radius:14px;font-size:14px;line-height:1.65;word-wrap:break-word}
+.msg.user{align-self:flex-end}
+.msg.user .who{text-align:right}
+.msg.user .bubble{background:linear-gradient(135deg,rgba(108,92,255,.32),rgba(0,212,255,.18));border:1px solid rgba(108,92,255,.4)}
+.msg.ai .bubble{background:var(--panel2);border:1px solid var(--border)}
+.msg.ai .bubble.glow{border-color:rgba(0,212,255,.4);box-shadow:0 0 18px rgba(0,212,255,.12)}
+.msg.wide{max-width:100%;width:100%}
+.bubble img{max-width:230px;border-radius:10px;display:block;margin:6px 0;border:1px solid var(--border)}
+.bubble pre{background:#0a0d16;border:1px solid var(--border);border-radius:10px;padding:12px;overflow-x:auto;
+  font-family:var(--mono);font-size:12.5px;margin:10px 0}
+.bubble code{font-family:var(--mono);font-size:.9em;background:rgba(108,92,255,.18);padding:1px 5px;border-radius:5px}
+.bubble pre code{background:none;padding:0}
+.bubble h1,.bubble h2,.bubble h3{margin:10px 0 6px;color:#fff}
+.bubble ul,.bubble ol{margin:6px 0 6px 22px}
+.bubble a{color:var(--neon2)}
+details.think{margin-bottom:10px;border:1px dashed rgba(255,78,205,.35);border-radius:10px;padding:8px 12px;background:rgba(255,78,205,.05)}
+details.think summary{cursor:pointer;font-size:11px;letter-spacing:.15em;color:var(--neon3);text-transform:uppercase}
+details.think .tbody{font-size:12.5px;color:var(--dim);margin-top:6px;line-height:1.6;white-space:pre-wrap}
+.skillCall{margin-top:8px;border:1px solid rgba(0,212,255,.3);border-radius:10px;padding:8px 12px;background:rgba(0,212,255,.06);font-family:var(--mono);font-size:12px}
+.skillCall .args{color:var(--dim)}
+.skillCall .skRes{margin-top:6px;color:var(--text);white-space:pre-wrap;word-break:break-all}
+.skillCall img{max-width:320px;border-radius:8px;margin-top:6px;display:block}
+/* ── 超級思考辯論面板 ── */
+.debate{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.dPanel{border:1px solid var(--border);border-radius:12px;padding:10px 12px;background:rgba(10,13,22,.55);
+  min-height:90px;transition:.3s;position:relative;overflow:hidden}
+.dPanel.live{box-shadow:0 0 16px var(--pc,#00d4ff44)}
+.dPanel .dHead{display:flex;align-items:center;gap:7px;font-size:11px;letter-spacing:.12em;font-weight:700;margin-bottom:6px}
+.dPanel .dDot{width:8px;height:8px;border-radius:50%;background:var(--pc);box-shadow:0 0 8px var(--pc)}
+.dPanel .dBody{font-size:12px;color:var(--dim);line-height:1.6;white-space:pre-wrap;max-height:200px;overflow-y:auto}
+.dPanel .dBody b{color:var(--text)}
+.dPhase{font-size:10px;letter-spacing:.25em;text-transform:uppercase;color:var(--neon4);margin:4px 0 8px;text-align:center;animation:phaseGlow 2s ease-in-out infinite}
+@keyframes phaseGlow{50%{text-shadow:0 0 14px var(--neon4)}}
+.cursor{display:inline-block;width:8px;height:15px;background:var(--neon2);vertical-align:text-bottom;animation:blink .8s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.empty{margin:auto;text-align:center;color:var(--dim)}
+.empty .big{font-size:46px;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;
+  font-weight:800;letter-spacing:.22em;margin-bottom:10px;animation:breathe 5s ease-in-out infinite}
+@keyframes breathe{50%{opacity:.65;letter-spacing:.3em}}
+/* ── composer ── */
+.composer{padding:14px 20px;border-top:1px solid var(--border);position:relative}
+/* ── 指令快捷選單 ── */
+#cmdMenu{position:absolute;bottom:calc(100% + 4px);left:20px;min-width:360px;z-index:20;display:none;
+  background:var(--panel);border:1px solid var(--border);border-radius:12px;backdrop-filter:blur(18px);
+  box-shadow:0 -8px 30px rgba(0,0,0,.45);overflow:hidden;animation:rise .15s ease}
+.cmdItem{display:flex;gap:12px;align-items:center;padding:10px 14px;cursor:pointer;font-size:13px}
+.cmdItem b{font-family:var(--mono);color:var(--neon2);min-width:72px;font-weight:600}
+.cmdItem span{color:var(--dim);font-size:12px}
+.cmdItem:hover,.cmdItem.sel{background:rgba(108,92,255,.16)}
+.cmdItem.sel b{text-shadow:0 0 8px var(--neon2)}
+#previews{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+#previews .thumb{position:relative;animation:rise .3s ease}
+#previews img{height:58px;border-radius:8px;border:1px solid var(--neon2);box-shadow:0 0 10px rgba(0,212,255,.3)}
+#previews .x{position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:#ff5566;color:#fff;
+  font-size:11px;display:grid;place-items:center;cursor:pointer;border:none}
+.inputRow{display:flex;gap:10px;align-items:flex-end}
+#input{flex:1;min-height:48px;max-height:160px}
+.composer .hint{font-size:11px;color:var(--dim);margin-top:8px;text-align:center}
+kbd{font-family:var(--mono);background:var(--panel2);border:1px solid var(--border);border-radius:4px;padding:0 5px;font-size:10px}
+.drop{outline:2px dashed var(--neon2);outline-offset:-8px}
+/* ── 訊息操作 ── */
+.msg .tools{display:flex;gap:6px;margin-top:5px;opacity:0;transition:.2s}
+.msg:hover .tools{opacity:1}
+.msg.user .tools{justify-content:flex-end}
+.tools button{border:1px solid var(--border);background:var(--panel2);color:var(--dim);font-size:11px;
+  border-radius:7px;padding:3px 9px;cursor:pointer;transition:.15s}
+.tools button:hover{color:var(--text);border-color:var(--neon1);box-shadow:0 0 8px rgba(108,92,255,.3)}
+.editBox{width:100%;min-width:320px;min-height:70px;background:var(--panel2);border:1px solid var(--neon1);
+  border-radius:10px;color:var(--text);padding:8px;font-size:13px;outline:none;resize:vertical;font-family:inherit}
+/* ── toast ── */
+#toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);background:var(--panel);
+  border:1px solid var(--neon1);border-radius:10px;padding:10px 18px;font-size:13px;z-index:99;
+  opacity:0;transition:.3s;pointer-events:none;box-shadow:0 0 20px rgba(108,92,255,.4);backdrop-filter:blur(12px)}
+#toast.show{opacity:1}
+/* ── 設定面板 ── */
+#settingsOverlay{position:fixed;inset:0;z-index:50;background:rgba(4,6,12,.6);backdrop-filter:blur(6px);
+  display:none;align-items:center;justify-content:center}
+#settingsOverlay.open{display:flex}
+.settings{width:min(640px,92vw);max-height:86vh;display:flex;flex-direction:column;background:var(--panel);
+  border:1px solid var(--border);border-radius:16px;backdrop-filter:blur(20px);animation:rise .3s ease;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.sHead{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)}
+.sHead b{letter-spacing:.15em}
+.sBody{overflow-y:auto;padding:6px 20px 20px}
+.sBody section{margin-top:18px}
+.sBody section>h3{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--dim);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.sBody section>h3::after{content:'';flex:1;height:1px;background:var(--border)}
+.txt{width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:10px;color:var(--text);
+  padding:9px 12px;font-size:13px;outline:none;margin-bottom:8px;font-family:var(--mono)}
+.txt:focus{border-color:var(--neon1)}
+.provRow{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.provRow label{flex:1;min-width:150px;display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border);
+  border-radius:10px;cursor:pointer;font-size:13px;transition:.15s;background:var(--panel2)}
+.provRow label:has(input:checked){border-color:var(--neon1);box-shadow:0 0 12px rgba(108,92,255,.3);color:#fff}
+.provBox{display:none;animation:rise .25s ease}
+.provBox.show{display:block}
+.tgRow{display:flex;align-items:center;gap:12px;padding:10px 0}
+.tgRow .desc{flex:1}
+.tgRow .desc b{font-size:13px;display:block}
+.tgRow .desc span{font-size:11.5px;color:var(--dim)}
+.toggle{position:relative;width:44px;height:24px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0}
+.toggle i{position:absolute;inset:0;border-radius:12px;background:rgba(120,150,255,.18);transition:.25s;cursor:pointer}
+.toggle i::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.25s}
+.toggle input:checked+i{background:var(--grad);box-shadow:0 0 12px rgba(108,92,255,.5)}
+.toggle input:checked+i::after{left:23px}
+.cmdTable{width:100%;font-size:12.5px;border-collapse:collapse}
+.cmdTable td{padding:7px 8px;border-bottom:1px solid var(--border);vertical-align:top}
+.cmdTable td:first-child{font-family:var(--mono);color:var(--neon2);white-space:nowrap}
+#memList{font-size:12px;color:var(--dim);max-height:140px;overflow-y:auto;margin:8px 0;line-height:1.7}
+::-webkit-scrollbar{width:8px}
+::-webkit-scrollbar-thumb{background:rgba(120,150,255,.2);border-radius:4px}
+@media(max-width:860px){.side{display:none}.debate{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="bg"></div><canvas id="particles"></canvas><div class="grid"></div>
+<div class="app">
+  <aside class="side">
+    <div class="card">
+      <div class="logo"><div class="mark">◆</div>
+        <div><b>ZHANGAI</b><small>LOCAL AI CONSOLE</small></div></div>
+      <div class="status"><div class="dot" id="dot"></div><span id="statusTxt">連線中…</span></div>
+      <div id="modelName">—</div>
+      <div style="height:12px"></div>
+      <button class="btn full" id="openSettings" data-i18n="btnSettings">⚙ 設定</button>
+    </div>
+    <div class="card">
+      <h3 data-i18n="hChats">對話紀錄</h3>
+      <button class="btn full primary" id="newChat" data-i18n="btnNew">✦ 新對話</button>
+      <div id="folderState" data-i18n="folderState">自動存檔至 chats/ 編號資料夾</div>
+      <div style="height:10px"></div>
+      <div id="chatList"></div>
+    </div>
+  </aside>
+  <main class="main">
+    <div class="chatHead">
+      <span class="title" data-i18n="consoleTitle">ZHANGAI 主控台</span><span class="spacer"></span>
+      <div class="statsBar">
+        <span><span data-i18n="stPrompt">提示</span> <b id="sPrompt">0</b> tok</span>
+        <span><span data-i18n="stGen">生成</span> <b id="sGen">0</b> tok</span>
+        <span><span data-i18n="stSpeed">速度</span> <b id="sSpeed">0.0</b> tok/s</span>
+      </div>
+    </div>
+    <div id="chat">
+      <div class="empty" id="emptyHint"></div>
+    </div>
+    <div class="composer">
+      <div id="previews"></div>
+      <div class="inputRow">
+        <button class="btn" id="imgBtn" title="image">🖼</button>
+        <input type="file" id="imgFile" accept="image/*" multiple hidden>
+        <textarea id="input" rows="1" data-i18n-ph="inputPh" placeholder="輸入訊息…"></textarea>
+        <button class="btn primary" id="send" data-i18n="btnSend">傳送 ➤</button>
+        <button class="btn danger" id="stop" style="display:none" data-i18n="btnStop">■ 停止</button>
+      </div>
+      <div class="hint" data-i18n-html="hint"></div>
+    </div>
+  </main>
+</div>
+
+<!-- ───────── 設定面板 ───────── -->
+<div id="settingsOverlay">
+  <div class="settings">
+    <div class="sHead"><b data-i18n="hSettings">⚙ 設定</b><button class="btn" id="closeSettings">✕</button></div>
+    <div class="sBody">
+      <section>
+        <h3>Language / 語言</h3>
+        <div class="provRow">
+          <label><input type="radio" name="lang" value="zh" checked> 中文</label>
+          <label><input type="radio" name="lang" value="en"> English</label>
+        </div>
+      </section>
+      <section>
+        <h3 data-i18n="hProvider">模型來源</h3>
+        <div class="provRow">
+          <label><input type="radio" name="prov" value="local" checked> <span data-i18n="provLocal">🖥 本地模型</span></label>
+          <label><input type="radio" name="prov" value="gemini"> ✨ Gemini</label>
+          <label><input type="radio" name="prov" value="deepseek"> 🐳 DeepSeek</label>
+        </div>
+        <div class="provBox" id="provGemini">
+          <input class="txt" id="geminiKey" type="password" placeholder="Gemini API Key (AIza…)">
+          <input class="txt" id="geminiModel" data-i18n-ph="phGeminiModel" placeholder="模型名稱(預設 gemini-2.5-flash)">
+        </div>
+        <div class="provBox" id="provDeepseek">
+          <input class="txt" id="dsKey" type="password" placeholder="DeepSeek API Key (sk-…)">
+          <input class="txt" id="dsModel" data-i18n-ph="phDsModel" placeholder="模型名稱(預設 deepseek-chat)">
+        </div>
+      </section>
+      <section>
+        <h3 data-i18n="hParams">推論參數</h3>
+        <div class="param"><label>Temperature <output id="tempV">0.7</output></label>
+          <input type="range" id="temp" min="0" max="2" step="0.05" value="0.7"></div>
+        <div class="param"><label>Top-P <output id="toppV">0.95</output></label>
+          <input type="range" id="topp" min="0" max="1" step="0.01" value="0.95"></div>
+        <div class="param"><label>Max Tokens <output id="maxtV">4096</output></label>
+          <input type="range" id="maxt" min="256" max="16384" step="256" value="4096"></div>
+        <div class="tgRow">
+          <div class="desc"><b data-i18n="pthinkT">/think 四路並行</b><span data-i18n="pthinkD">同時生成四位辯手。本地模型需在啟動腳本加 -np 4 且 VRAM 足夠;關閉則逐一生成(較穩)</span></div>
+          <label class="toggle"><input type="checkbox" id="parallelThink"><i></i></label>
+        </div>
+      </section>
+      <section>
+        <h3 data-i18n="hSysPrompt">系統提示</h3>
+        <textarea id="sysPrompt" rows="3" data-i18n-ph="phSysPrompt" placeholder="你是一個樂於助人的 AI 助手…"></textarea>
+      </section>
+      <section>
+        <h3 data-i18n="hMemory">使用者資料(記憶)</h3>
+        <div class="tgRow">
+          <div class="desc"><b data-i18n="memWT">記錄使用者資料</b><span data-i18n="memWD">對話後 AI 自動將與你相關的資訊寫入 memory.json</span></div>
+          <label class="toggle"><input type="checkbox" id="memWrite"><i></i></label>
+        </div>
+        <div class="tgRow">
+          <div class="desc"><b data-i18n="memRT">使用使用者資料</b><span data-i18n="memRD">對話時 AI 讀取 memory.json 作為背景知識</span></div>
+          <label class="toggle"><input type="checkbox" id="memRead"><i></i></label>
+        </div>
+        <div id="memList">(尚無記憶)</div>
+        <button class="btn danger" id="memClear" data-i18n="btnMemClear">清除全部記憶</button>
+      </section>
+      <section>
+        <h3 data-i18n="hCommands">指令列表</h3>
+        <table class="cmdTable" id="cmdStatic"></table>
+        <div style="height:8px"></div>
+        <table class="cmdTable" id="skillTable"></table>
+      </section>
+      <div style="text-align:center;font-size:11px;color:var(--dim);padding:18px 0 4px;letter-spacing:.08em">
+        ZHANGAI · by <b style="color:var(--neon2)">Chris Zhang</b> © 2026 · All Rights Reserved · Non-Commercial License
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:8090';   // llama-server (health/model info only)
+const BK  = '';                        // ZHANGAI backend (same origin :8080)
+const $ = id => document.getElementById(id);
+let messages = [], images = [], chatId = null;
+let controllers = [], busy = false, stopAll = false;
+
+/* ════ 設定 ════ */
+const S = Object.assign({provider:'local', geminiKey:'', geminiModel:'', dsKey:'', dsModel:'',
+  temp:0.7, topp:0.95, maxt:4096, sys:'', memWrite:false, memRead:false, parallelThink:false,
+  lang:'zh'},
+  JSON.parse(localStorage.getItem('zh_settings')||'{}'));
+function saveS(){ localStorage.setItem('zh_settings', JSON.stringify(S)); }
+
+/* ════ i18n ════ */
+const I18N = {
+zh:{
+  btnSettings:'⚙ 設定', hChats:'對話紀錄', btnNew:'✦ 新對話',
+  folderState:'自動存檔至 chats/ 編號資料夾', consoleTitle:'ZHANGAI 主控台',
+  stPrompt:'提示', stGen:'生成', stSpeed:'速度',
+  emptyHint:'<div class="big">ZHANGAI</div><div>輸入訊息開始對話 · <b>/skill</b> 工具模式 · <b>/think</b> 超級思考 · <b>/search</b> 網路搜尋</div>',
+  inputPh:'輸入訊息…(輸入 / 喚出指令選單)',
+  btnSend:'傳送 ➤', btnStop:'■ 停止',
+  hint:'<kbd>Enter</kbd> 傳送 · <kbd>Shift+Enter</kbd> 換行 · <kbd>Ctrl+V</kbd> 貼圖 · 輸入 <kbd>/</kbd> 喚出指令選單,<kbd>Tab</kbd> 補全',
+  hSettings:'⚙ 設定', hProvider:'模型來源', provLocal:'🖥 本地模型',
+  phGeminiModel:'模型名稱(預設 gemini-2.5-flash)', phDsModel:'模型名稱(預設 deepseek-chat)',
+  hParams:'推論參數', pthinkT:'/think 四路並行',
+  pthinkD:'同時生成四位辯手。本地模型需在啟動腳本加 -np 4 且 VRAM 足夠;關閉則逐一生成(較穩)',
+  hSysPrompt:'系統提示', phSysPrompt:'你是一個樂於助人的 AI 助手…',
+  hMemory:'使用者資料(記憶)',
+  memWT:'記錄使用者資料', memWD:'對話後 AI 自動將與你相關的資訊寫入 memory.json',
+  memRT:'使用使用者資料', memRD:'對話時 AI 讀取 memory.json 作為背景知識',
+  memEmpty:'(尚無記憶)', memFailRead:'(無法讀取)', btnMemClear:'清除全部記憶',
+  confirmMemClear:'清除全部記憶?', hCommands:'指令列表',
+  cmdStaticRows:'<tr><td>/skill</td><td>工具模式 — AI 可呼叫 skills/ 內的本地工具(清單如下)</td></tr><tr><td>/think</td><td>超級思考 — 4 個 AI 角色給觀點後由主持人總結裁決</td></tr><tr><td>/search</td><td>網路搜尋 — 先上網抓相關資料,再依結果回答並標註來源</td></tr>',
+  cmd_skill:'工具模式 — 讀寫檔案、DOCX、計算、生圖',
+  cmd_think:'超級思考 — 4 個 AI 觀點 + 主持人裁決',
+  cmd_search:'網路搜尋 — 先上網抓資料再回答',
+  skillTableFail:'無法載入(server.py 沒在跑?)',
+  stConnecting:'連線中…', stConnected:'已連線 llama-server',
+  stBusy:'模型忙碌中(請求排隊處理)', stErr:'伺服器異常',
+  stOffline:'離線 — 請先執行 start.bat', stCloud:'雲端模式 — ',
+  thinkLabel:'💭 思考過程',
+  toolEdit:'✏ 編輯', toolResend:'↻ 重送', toolRegen:'↻ 重新生成',
+  btnSaveResend:'儲存並重送', btnCancel:'取消',
+  toolResult:'🛠 工具結果', running:'執行中…',
+  noResp:'(無回應)', onlyThink:'(模型只輸出了思考內容,可調高 Max Tokens 再試)',
+  toolLimit:'(已達工具呼叫次數上限 4 次)', backendDown:'後端無回應: ',
+  toolOk:'成功', toolFail:'失敗', describeImg:'描述這張圖片',
+  searchTitle:'🔍 網路搜尋', searching:'搜尋中…',
+  searchFail:'搜尋失敗或無結果', searchFallback:'(將直接以模型知識回答)',
+  sumEnough:'✅ 摘要已足夠,單次直接回答',
+  deepRead1:'📖 摘要不足,深入閱讀第 ', deepRead2:' 筆內文…',
+  gotRead1:'✅ 已讀取 ', gotRead2:' 的內文',
+  readFailFb:'內文抓取失敗,以摘要回答', contentRead:'📖 已讀內文',
+  chatListEmpty:'尚無對話紀錄', confirmDel:'刪除對話 #',
+  busyTip:'生成中 — 點擊將在新視窗開啟', delTip:'刪除',
+  emptyChatTitle:'(空白對話)', imgTag:'[圖片]',
+  toastMem1:'🧠 已記住 ', toastMem2:' 條使用者資訊', toastMemFail:'⚠ 記憶寫入失敗',
+  phase1:'⚡ ROUND 1 — 四方觀點生成中', phaseFinal:'⚖ FINAL — 主持人總結裁決',
+  thinkSum:'(思考摘要)', noView:'(無觀點)',
+  prevConv:'先前對話:', qLabel:'問題:', uLabel:'使用者:', aLabel:'AI:',
+  memInject:'【系統記憶】以下是過往累積的使用者背景資料,僅供你回答時參考。切勿在回覆中列出、複述或提及這份清單:\n',
+  skillSys1:'你可以呼叫本地工具。需要使用工具時,只輸出一行 JSON,不要加任何其他文字:\n{"skill":"工具名","args":{"參數":"值"}}\n可用工具:\n',
+  skillSys2:'\n系統執行後會以「[工具結果]」訊息回傳,你再根據結果繼續呼叫工具或用自然語言給最終回答。若不需要工具,直接正常回答。',
+  debSuffix:' 用繁體中文,直接陳述觀點,精簡有力,300字內,不要客套。',
+  modSys:'你是辯論主持人。請整理四位專家的觀點:1) 共識:他們都同意什麼 2) 分歧:最大的對立點與誰較有說服力 3) 最終答案:全面、可直接採用的結論。條理分明,用繁體中文。',
+  modUser1:'四位專家的觀點:', modUser2:'請依 共識/分歧/最終答案 的結構總結。',
+  searchInstr1:'【系統即時搜尋結果】\n',
+  searchInstr2:'\n\n指示:若上述標題與摘要足以可靠回答我上一則訊息的問題,直接給出最終答案並以 [編號] 標註引用來源;若資訊不足以可靠回答,只輸出一行「需要:」加上最值得深入閱讀的結果編號(最多3個,逗號分隔),例如:需要:1,3。不要其他文字。',
+  searchFinalSys:'以下是即時網路搜尋結果與內文節錄。回答時請優先參考,並用 [編號] 標註引用來源:\n',
+  extraCtxHdr:'【系統補充資料,回答我上一則訊息時參考】\n',
+  snippetLb:'摘要:', contentLb:'內文節錄:',
+},
+en:{
+  btnSettings:'⚙ Settings', hChats:'Chat History', btnNew:'✦ New Chat',
+  folderState:'Auto-saved to numbered folders in chats/', consoleTitle:'ZHANGAI Console',
+  stPrompt:'prompt', stGen:'gen', stSpeed:'speed',
+  emptyHint:'<div class="big">ZHANGAI</div><div>Type a message to start · <b>/skill</b> tools · <b>/think</b> debate · <b>/search</b> web</div>',
+  inputPh:'Type a message… (type / for command menu)',
+  btnSend:'Send ➤', btnStop:'■ Stop',
+  hint:'<kbd>Enter</kbd> send · <kbd>Shift+Enter</kbd> newline · <kbd>Ctrl+V</kbd> paste image · type <kbd>/</kbd> for command menu, <kbd>Tab</kbd> to complete',
+  hSettings:'⚙ Settings', hProvider:'Model Source', provLocal:'🖥 Local model',
+  phGeminiModel:'Model name (default gemini-2.5-flash)', phDsModel:'Model name (default deepseek-chat)',
+  hParams:'Inference Params', pthinkT:'/think parallel mode',
+  pthinkD:'Generate all four debaters at once. Local engine needs -np 4 in the start script and enough VRAM; off = one-by-one (safer)',
+  hSysPrompt:'System Prompt', phSysPrompt:'You are a helpful AI assistant…',
+  hMemory:'User Data (Memory)',
+  memWT:'Record user data', memWD:'After each reply the AI saves facts about you to memory.json',
+  memRT:'Use user data', memRD:'The AI reads memory.json as background knowledge during chats',
+  memEmpty:'(no memories yet)', memFailRead:'(failed to read)', btnMemClear:'Clear all memories',
+  confirmMemClear:'Clear all memories?', hCommands:'Commands',
+  cmdStaticRows:'<tr><td>/skill</td><td>Tool mode — the AI can call local tools in skills/ (listed below)</td></tr><tr><td>/think</td><td>Super Think — 4 AI personas debate, then a moderator gives the verdict</td></tr><tr><td>/search</td><td>Web search — fetch live results first, answer with cited sources</td></tr>',
+  cmd_skill:'Tool mode — files, DOCX, math, image gen',
+  cmd_think:'Super Think — 4 AI views + moderator verdict',
+  cmd_search:'Web search — fetch data, then answer',
+  skillTableFail:'Failed to load (is server.py running?)',
+  stConnecting:'Connecting…', stConnected:'llama-server connected',
+  stBusy:'Model busy (requests queued)', stErr:'Server error',
+  stOffline:'Offline — run start.bat / start.sh first', stCloud:'Cloud mode — ',
+  thinkLabel:'💭 Reasoning',
+  toolEdit:'✏ Edit', toolResend:'↻ Resend', toolRegen:'↻ Regenerate',
+  btnSaveResend:'Save & Resend', btnCancel:'Cancel',
+  toolResult:'🛠 Tool result', running:'Running…',
+  noResp:'(no response)', onlyThink:'(model produced only reasoning — try raising Max Tokens)',
+  toolLimit:'(tool-call limit of 4 reached)', backendDown:'Backend unreachable: ',
+  toolOk:'success', toolFail:'failure', describeImg:'Describe this image',
+  searchTitle:'🔍 Web Search', searching:'Searching…',
+  searchFail:'Search failed or no results', searchFallback:'(answering from model knowledge)',
+  sumEnough:'✅ Snippets sufficient — answered in one pass',
+  deepRead1:'📖 Snippets insufficient — reading items ', deepRead2:' in full…',
+  gotRead1:'✅ Read full content of ', gotRead2:'',
+  readFailFb:'Content fetch failed — answering from snippets', contentRead:'📖 content read',
+  chatListEmpty:'No chats yet', confirmDel:'Delete chat #',
+  busyTip:'Generating — click opens in a new window', delTip:'Delete',
+  emptyChatTitle:'(empty chat)', imgTag:'[image]',
+  toastMem1:'🧠 Remembered ', toastMem2:' user fact(s)', toastMemFail:'⚠ Memory write failed',
+  phase1:'⚡ ROUND 1 — Generating four perspectives', phaseFinal:'⚖ FINAL — Moderator verdict',
+  thinkSum:'(reasoning summary)', noView:'(no view)',
+  prevConv:'Previous conversation:', qLabel:'Question: ', uLabel:'User: ', aLabel:'AI: ',
+  memInject:'[System memory] Background facts about the user from past chats. Reference only — never list, repeat, or mention this list in replies:\n',
+  skillSys1:'You can call local tools. When you need one, output exactly one line of JSON and nothing else:\n{"skill":"tool_name","args":{"param":"value"}}\nAvailable tools:\n',
+  skillSys2:'\nThe system will reply with a "[工具結果]" message containing the result; then either call another tool or give the final answer in natural language. If no tool is needed, just answer normally.',
+  debSuffix:' Answer in English. State your view directly — concise and forceful, under 200 words, no pleasantries.',
+  modSys:'You are the debate moderator. Organize the four experts\' views: 1) Consensus — what they all agree on 2) Disagreement — the biggest clash and who is more convincing 3) Final answer — comprehensive and directly usable. Be structured. Answer in English.',
+  modUser1:'The four experts\' views:', modUser2:'Summarize using the Consensus / Disagreement / Final-answer structure.',
+  searchInstr1:'[Live web search results]\n',
+  searchInstr2:'\n\nInstruction: If the titles and snippets above are enough to reliably answer my previous message, give the final answer directly, citing sources as [number]. If NOT enough, output exactly one line "NEED:" followed by up to 3 result numbers worth reading in full (comma separated), e.g. NEED:1,3. No other text.',
+  searchFinalSys:'Below are live web search results with content excerpts. Use them as the primary reference and cite sources as [number]:\n',
+  extraCtxHdr:'[System reference material for answering my previous message]\n',
+  snippetLb:'Snippet: ', contentLb:'Content excerpt: ',
+}};
+function t(k){ return (I18N[S.lang]||I18N.zh)[k] ?? I18N.zh[k] ?? k; }
+function applyLang(){
+  document.documentElement.lang = S.lang==='en' ? 'en' : 'zh-Hant';
+  document.querySelectorAll('[data-i18n]').forEach(el=>el.textContent = t(el.dataset.i18n));
+  document.querySelectorAll('[data-i18n-html]').forEach(el=>el.innerHTML = t(el.dataset.i18nHtml));
+  document.querySelectorAll('[data-i18n-ph]').forEach(el=>el.placeholder = t(el.dataset.i18nPh));
+  if($('emptyHint')) $('emptyHint').innerHTML = t('emptyHint');
+  $('cmdStatic').innerHTML = t('cmdStaticRows');
+}
+function applySettings(){
+  document.querySelectorAll('input[name=lang]').forEach(r=>r.checked = r.value===S.lang);
+  document.querySelectorAll('input[name=prov]').forEach(r=>r.checked = r.value===S.provider);
+  $('provGemini').classList.toggle('show', S.provider==='gemini');
+  $('provDeepseek').classList.toggle('show', S.provider==='deepseek');
+  $('geminiKey').value=S.geminiKey; $('geminiModel').value=S.geminiModel;
+  $('dsKey').value=S.dsKey; $('dsModel').value=S.dsModel;
+  $('temp').value=S.temp; $('tempV').textContent=S.temp;
+  $('topp').value=S.topp; $('toppV').textContent=S.topp;
+  $('maxt').value=S.maxt; $('maxtV').textContent=S.maxt;
+  $('sysPrompt').value=S.sys;
+  $('memWrite').checked=S.memWrite; $('memRead').checked=S.memRead;
+  $('parallelThink').checked=S.parallelThink;
+}
+$('openSettings').onclick = ()=>{ $('settingsOverlay').classList.add('open'); renderMemList(); renderSkillTable(); };
+$('closeSettings').onclick = ()=> $('settingsOverlay').classList.remove('open');
+$('settingsOverlay').addEventListener('click', e=>{ if(e.target.id==='settingsOverlay') e.target.classList.remove('open'); });
+document.querySelectorAll('input[name=prov]').forEach(r=>r.addEventListener('change', ()=>{
+  S.provider = r.value; saveS(); applySettings();
+  $('modelName').textContent='—'; ping();
+}));
+document.querySelectorAll('input[name=lang]').forEach(r=>r.addEventListener('change', ()=>{
+  S.lang = r.value; saveS(); applyLang(); ping();
+  if(!messages.length) renderAll();
+  renderMemList(); renderSkillTable();
+}));
+['geminiKey','geminiModel','dsKey','dsModel'].forEach(id=>
+  $(id).addEventListener('input', e=>{ S[id]=e.target.value.trim(); saveS(); }));
+$('sysPrompt').addEventListener('input', e=>{ S.sys=e.target.value; saveS(); });
+$('memWrite').addEventListener('change', e=>{ S.memWrite=e.target.checked; saveS(); });
+$('memRead').addEventListener('change', e=>{ S.memRead=e.target.checked; saveS(); });
+$('parallelThink').addEventListener('change', e=>{ S.parallelThink=e.target.checked; saveS(); });
+async function renderSkillTable(){
+  try{
+    const list = await (await fetch(BK+'/api/skills')).json();
+    $('skillTable').innerHTML = list.map(s=>`<tr><td>${esc(s.name)}</td><td>${esc(s.desc)}</td></tr>`).join('');
+  }catch{ $('skillTable').innerHTML=`<tr><td colspan="2">${t('skillTableFail')}</td></tr>`; }
+}
+
+/* ════ 使用者記憶 ════ */
+async function renderMemList(){
+  try{
+    const m = await (await fetch(BK+'/api/memory')).json();
+    $('memList').innerHTML = m.facts?.length
+      ? m.facts.map(f=>'• '+esc(f.text)).join('<br>') : t('memEmpty');
+  }catch{ $('memList').textContent = t('memFailRead'); }
+}
+$('memClear').onclick = async ()=>{
+  if(!confirm(t('confirmMemClear'))) return;
+  try{ await fetch(BK+'/api/memory', {method:'DELETE'}); }catch{}
+  renderMemList();
+};
+async function getMemoryPrompt(){
+  if(!S.memRead) return '';
+  try{
+    const m = await (await fetch(BK+'/api/memory')).json();
+    if(m.facts?.length) return t('memInject') + m.facts.map(f=>'- '+f.text).join('\n');
+  }catch{}
+  return '';
+}
+function toast(msg){
+  let t = $('toast');
+  if(!t){ t = document.createElement('div'); t.id='toast'; document.body.appendChild(t); }
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(()=>t.classList.remove('show'), 2800);
+}
+async function memExtract(userText, aiText){
+  if(!S.memWrite || !userText || typeof userText!=='string') return;
+  try{
+    const r = await (await fetch(BK+'/api/mem_extract', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        provider: S.provider,
+        api_key: S.provider==='gemini' ? S.geminiKey : S.provider==='deepseek' ? S.dsKey : '',
+        model: S.provider==='gemini' ? (S.geminiModel||'gemini-2.5-flash')
+             : S.provider==='deepseek' ? (S.dsModel||'deepseek-chat') : '',
+        user: userText, ai: String(aiText||''), lang: S.lang
+      })})).json();
+    if(r.added) toast(t('toastMem1')+r.added+t('toastMem2'));
+    else if(!r.ok) { console.warn('mem extract failed', r.error); toast(t('toastMemFail')); }
+  }catch(e){ console.warn('mem extract failed', e); }
+}
+
+/* ════ 粒子連線背景 ════ */
+(function(){
+  const cv = $('particles'), cx = cv.getContext('2d');
+  let W,H,pts=[];
+  function resize(){ W=cv.width=innerWidth; H=cv.height=innerHeight;
+    pts = Array.from({length:Math.min(70,W/22)},()=>({
+      x:Math.random()*W, y:Math.random()*H,
+      vx:(Math.random()-.5)*.35, vy:(Math.random()-.5)*.35, r:Math.random()*1.6+.6}));
+  }
+  resize(); addEventListener('resize', resize);
+  (function tick(){
+    cx.clearRect(0,0,W,H);
+    for(const p of pts){
+      p.x+=p.vx; p.y+=p.vy;
+      if(p.x<0||p.x>W) p.vx*=-1;
+      if(p.y<0||p.y>H) p.vy*=-1;
+      cx.beginPath(); cx.arc(p.x,p.y,p.r,0,7);
+      cx.fillStyle='rgba(110,140,255,.5)'; cx.fill();
+    }
+    for(let i=0;i<pts.length;i++) for(let j=i+1;j<pts.length;j++){
+      const a=pts[i],b=pts[j],dx=a.x-b.x,dy=a.y-b.y,d=dx*dx+dy*dy;
+      if(d<130*130){
+        cx.beginPath(); cx.moveTo(a.x,a.y); cx.lineTo(b.x,b.y);
+        cx.strokeStyle=`rgba(108,92,255,${.16*(1-d/(130*130))})`; cx.stroke();
+      }
+    }
+    requestAnimationFrame(tick);
+  })();
+})();
+
+/* ════ 按鈕漣漪 ════ */
+document.addEventListener('click', e=>{
+  const b = e.target.closest('.btn');
+  if(!b) return;
+  const r = b.getBoundingClientRect(), s = document.createElement('span');
+  s.className='ripple';
+  const sz = Math.max(r.width,r.height);
+  s.style.cssText=`width:${sz}px;height:${sz}px;left:${e.clientX-r.left-sz/2}px;top:${e.clientY-r.top-sz/2}px`;
+  b.appendChild(s); setTimeout(()=>s.remove(),600);
+});
+
+/* ════ 伺服器狀態 ════ */
+async function ping(){
+  if(S.provider !== 'local'){
+    $('dot').classList.add('on');
+    $('statusTxt').textContent = t('stCloud') + (S.provider==='gemini'?'Gemini':'DeepSeek');
+    $('modelName').textContent = S.provider==='gemini'
+      ? (S.geminiModel||'gemini-2.5-flash') : (S.dsModel||'deepseek-chat');
+    return;
+  }
+  try{
+    const r = await fetch(API + '/health');
+    $('dot').classList.toggle('on', r.ok || r.status===503);
+    $('statusTxt').textContent = r.ok ? t('stConnected')
+      : r.status===503 ? t('stBusy') : t('stErr');
+    if(r.ok && $('modelName').textContent === '—'){
+      const m = await (await fetch(API + '/v1/models')).json();
+      $('modelName').textContent = (m.data?.[0]?.id || '').split(/[\\/]/).pop();
+    }
+  }catch{ $('dot').classList.remove('on'); $('statusTxt').textContent = t('stOffline'); }
+}
+ping(); setInterval(ping, 5000);
+
+[['temp','tempV'],['topp','toppV'],['maxt','maxtV']].forEach(([a,b])=>
+  $(a).addEventListener('input', e => { $(b).textContent = e.target.value; S[a] = +e.target.value; saveS(); }));
+
+/* ════ Markdown ════ */
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function md(s){
+  s = esc(s);
+  s = s.replace(/```(\w*)\n?([\s\S]*?)(```|$)/g, (_,l,c)=>`<pre><code>${c}</code></pre>`);
+  s = s.replace(/`([^`\n]+)`/g,'<code>$1</code>');
+  s = s.replace(/^### (.*)$/gm,'<h3>$1</h3>').replace(/^## (.*)$/gm,'<h2>$1</h2>').replace(/^# (.*)$/gm,'<h1>$1</h1>');
+  s = s.replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');
+  s = s.replace(/^[-*] (.*)$/gm,'<li>$1</li>').replace(/(<li>[\s\S]*?<\/li>)(?!\s*<li>)/g,'<ul>$1</ul>');
+  s = s.replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g,'<a href="$2" target="_blank">$1</a>');
+  return s.replace(/\n/g,'<br>');
+}
+
+/* ════ 訊息渲染 ════ */
+function addMsg(role, html, wide){
+  $('emptyHint')?.remove();
+  const d = document.createElement('div');
+  d.className = 'msg ' + (role==='user'?'user':'ai') + (wide?' wide':'');
+  d.innerHTML = `<div class="who">${role==='user'?'YOU':'ZHANGAI'}</div><div class="bubble">${html}</div>`;
+  $('chat').appendChild(d);
+  $('chat').scrollTop = $('chat').scrollHeight;
+  return d.querySelector('.bubble');
+}
+function renderAssistant(bubble, think, content, streaming){
+  let h = '';
+  if(think) h += `<details class="think" ${content?'':'open'}><summary>${t('thinkLabel')}</summary><div class="tbody">${esc(think)}</div></details>`;
+  h += md(content);
+  if(streaming) h += '<span class="cursor"></span>';
+  bubble.innerHTML = h;
+}
+function setBusy(b){
+  busy = b;
+  if(b) stopAll = false;   // 新回合重置停止旗標
+  document.querySelector('.main').classList.toggle('generating', b);
+  $('send').style.display = b?'none':'';
+  $('stop').style.display = b?'':'none';
+}
+
+/* ════ 訊息編輯 / 重送 / 重新生成 ════ */
+const emptyHtml = () => `<div class="empty" id="emptyHint">${t('emptyHint')}</div>`;
+function addTools(bubble, idx){
+  const m = messages[idx];
+  if(!m) return;
+  if(m.role==='user' && typeof m.content==='string' && m.content.startsWith('[工具結果]')) return;
+  const div = document.createElement('div');
+  div.className = 'tools';
+  div.innerHTML = m.role==='user'
+    ? `<button data-a="edit">${t('toolEdit')}</button><button data-a="resend">${t('toolResend')}</button>`
+    : `<button data-a="regen">${t('toolRegen')}</button>`;
+  div.addEventListener('click', e=>{
+    const a = e.target.dataset?.a;
+    if(!a || busy) return;
+    if(a==='edit') editMsg(idx, bubble);
+    else if(a==='resend') resendFrom(idx);
+    else if(a==='regen') regenFrom(idx);
+  });
+  bubble.parentElement.appendChild(div);
+}
+function editMsg(idx, bubble){
+  const m = messages[idx];
+  const old = typeof m.content==='string' ? m.content : (m.content.find(c=>c.type==='text')?.text || '');
+  bubble.innerHTML = `<textarea class="editBox"></textarea>
+    <div style="margin-top:8px;display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn primary btnSave">${t('btnSaveResend')}</button><button class="btn btnCancel">${t('btnCancel')}</button></div>`;
+  const box = bubble.querySelector('.editBox');
+  box.value = old; box.focus();
+  bubble.querySelector('.btnCancel').onclick = () => renderAll();
+  bubble.querySelector('.btnSave').onclick = () => {
+    const nv = box.value.trim();
+    if(!nv) return;
+    if(typeof m.content==='string') m.content = nv;
+    else {
+      const t = m.content.find(c=>c.type==='text');
+      if(t) t.text = nv; else m.content.push({type:'text', text:nv});
+    }
+    resendFrom(idx);
+  };
+}
+function resendFrom(idx){          // 截斷到該則使用者訊息,重新生成後續
+  if(busy) return;
+  messages = messages.slice(0, idx+1);
+  // 編輯時打了 /think 或 /skill 指令 → 一樣要執行
+  const m = messages[idx];
+  let txt = typeof m.content==='string' ? m.content : (m.content.find(c=>c.type==='text')?.text || '');
+  const skillMode = /^\/skill\b/i.test(txt), thinkMode = /^\/think\b/i.test(txt),
+        searchMode = /^\/search\b/i.test(txt);
+  if(skillMode || thinkMode || searchMode){
+    txt = txt.replace(/^\/(skill|think|search)\s*/i,'');
+    if(typeof m.content==='string') m.content = txt;
+    else { const t = m.content.find(c=>c.type==='text'); if(t) t.text = txt; }
+  }
+  renderAll();
+  if(thinkMode) runThinkTurn(txt);
+  else if(searchMode) runSearchTurn(txt);
+  else runTurn(skillMode);
+}
+function regenFrom(idx){           // 移除該則 AI 回覆與其後內容,重新生成
+  if(busy) return;
+  messages = messages.slice(0, idx);
+  renderAll();
+  runTurn(false);
+}
+function renderAll(){
+  $('chat').innerHTML = '';
+  if(!messages.length){ $('chat').innerHTML = emptyHtml(); return; }
+  messages.forEach((m,i)=>{
+    if(m.role==='user'){
+      // 工具結果 → 顯示為工具卡片而非使用者氣泡
+      if(typeof m.content==='string' && m.content.startsWith('[工具結果]')){
+        const b = addMsg('assistant','');
+        b.innerHTML = `<div class="skillCall" style="margin-top:0">${t('toolResult')}<div class="skRes">${
+          esc(m.content.replace(/^\[工具結果\]\s*/,'').slice(0,1500))}</div></div>`;
+        return;
+      }
+      const html = typeof m.content==='string' ? md(m.content)
+        : m.content.map(c=>c.type==='image_url'?`<img src="${c.image_url.url}">`:md(c.text||'')).join('');
+      addTools(addMsg('user', html), i);
+    } else {
+      const b = addMsg('assistant','');
+      // 工具呼叫 JSON → 顯示為呼叫卡片而非原始 JSON
+      const call = typeof m.content==='string' ? extractSkillCall(m.content) : null;
+      if(call){
+        renderAssistant(b, m.reasoning||'', '', false);
+        b.insertAdjacentHTML('beforeend',
+          `<div class="skillCall">🛠 ${esc(call.skill)} <span class="args">${esc(JSON.stringify(call.args||{}))}</span></div>`);
+      } else {
+        renderAssistant(b, m.reasoning||'', m.content||'', false);
+        addTools(b, i);
+      }
+    }
+  });
+}
+
+/* ════ 統計 ════ */
+let statT0 = 0, statTok = 0;
+function statReset(){ statT0 = 0; statTok = 0; }
+function statTick(n=1){
+  if(!statT0) statT0 = performance.now();
+  statTok += n;
+  const s = Math.max((performance.now()-statT0)/1000,.001);
+  $('sGen').textContent = statTok;
+  $('sSpeed').textContent = (statTok/s).toFixed(1);
+  $('sGen').classList.add('hot'); $('sSpeed').classList.add('hot');
+  clearTimeout(statTick._t);
+  statTick._t = setTimeout(()=>{$('sGen').classList.remove('hot');$('sSpeed').classList.remove('hot')},300);
+}
+
+/* ════ 低階串流(經 server.py 代理,支援本地/Gemini/DeepSeek)════ */
+function buildBody(apiMsgs, opts={}){
+  const b = {messages: apiMsgs, stream: true, provider: S.provider,
+    temperature: opts.temperature ?? +$('temp').value,
+    top_p: +$('topp').value,
+    max_tokens: opts.maxTokens ?? +$('maxt').value};
+  if(S.provider==='gemini'){ b.api_key=S.geminiKey; b.model=S.geminiModel||'gemini-2.5-flash'; }
+  else if(S.provider==='deepseek'){ b.api_key=S.dsKey; b.model=S.dsModel||'deepseek-chat'; b.stream_options={include_usage:true}; }
+  else { b.stream_options={include_usage:true}; b.cache_prompt = true; }
+  if(opts.noThink && S.provider==='local') b.chat_template_kwargs = {enable_thinking:false};
+  return b;
+}
+async function streamLLM(apiMsgs, opts={}){
+  if(stopAll) return {think:'', answer:'', aborted:true};   // 已按停止 → 不再發新請求
+  const ctl = new AbortController();
+  controllers.push(ctl);
+  let think='', answer='', aborted=false;
+  try{
+    let r;
+    for(let retry=0; ; retry++){      // 503 = 引擎忙碌 → 自動重試排隊,最多 ~60 秒
+      r = await fetch(BK + '/api/llm', {
+        method:'POST', headers:{'Content-Type':'application/json'}, signal: ctl.signal,
+        body: JSON.stringify(buildBody(apiMsgs, opts))
+      });
+      if(r.status===503 && retry<20){ await new Promise(s=>setTimeout(s,3000)); continue; }
+      break;
+    }
+    if(!r.ok) throw new Error('HTTP '+r.status+' — '+(await r.text()).slice(0,200));
+    const rd = r.body.getReader(), dec = new TextDecoder();
+    let buf='';
+    while(true){
+      const {done, value} = await rd.read();
+      if(done) break;
+      buf += dec.decode(value,{stream:true});
+      const lines = buf.split('\n'); buf = lines.pop();
+      for(const ln of lines){
+        if(!ln.startsWith('data: ')) continue;
+        const p = ln.slice(6).trim();
+        if(p==='[DONE]') continue;
+        let j; try{ j = JSON.parse(p); }catch{ continue; }
+        if(j.usage?.prompt_tokens) $('sPrompt').textContent = j.usage.prompt_tokens;
+        const d = j.choices?.[0]?.delta || {};
+        const piece = d.content || '', tPiece = d.reasoning_content || '';
+        if(piece || tPiece){
+          think += tPiece; answer += piece;
+          statTick();
+          opts.onUpdate?.(think, answer);
+        }
+      }
+    }
+  }catch(err){
+    if(err.name==='AbortError') aborted = true;
+    else answer += (answer?'\n\n':'')+'⚠ '+err.message;
+    opts.onUpdate?.(think, answer);
+  }
+  controllers = controllers.filter(c=>c!==ctl);
+  return {think, answer, aborted};
+}
+
+/* ════ /skill 工具模式 ════ */
+let skillCatalog = null;
+async function getSkillPrompt(){
+  if(!skillCatalog){
+    try{ skillCatalog = await (await fetch(BK+'/api/skills')).json(); }catch{ skillCatalog = []; }
+  }
+  if(!skillCatalog.length) return '';
+  return t('skillSys1')
+    + skillCatalog.map(s=>`- ${s.name} ${JSON.stringify(s.params)} — ${s.desc}`).join('\n')
+    + t('skillSys2');
+}
+function extractSkillCall(s){
+  const i = s.indexOf('{"skill"');
+  if(i < 0) return null;
+  const end = s.lastIndexOf('}');
+  for(let j = end+1; j > i; j--){
+    try{ const o = JSON.parse(s.slice(i,j)); if(o && o.skill) return o; }catch{}
+  }
+  return null;
+}
+
+/* ════ /think 超級思考:4 AI 辯論 ════ */
+const DEBATERS_I18N = {
+zh:[
+  {name:'邏輯分析者', color:'#00d4ff', sys:'你是嚴謹的邏輯分析者,擅長一步步演繹推理、拆解問題結構。'},
+  {name:'創意發想者', color:'#ff4ecd', sys:'你是大膽的創意發想者,擅長跳脫框架、提出非常規的角度與類比。'},
+  {name:'批判質疑者', color:'#ffb020', sys:'你是尖銳的批判質疑者,專找論證漏洞、反例與被忽略的風險。'},
+  {name:'務實執行者', color:'#2bdb84', sys:'你是務實執行者,只關心可行性、成本、步驟與真實世界的限制。'},
+],
+en:[
+  {name:'Logic Analyst', color:'#00d4ff', sys:'You are a rigorous logic analyst who reasons step by step and decomposes problem structures.'},
+  {name:'Creative Thinker', color:'#ff4ecd', sys:'You are a bold creative thinker who breaks frames with unconventional angles and analogies.'},
+  {name:'Critical Skeptic', color:'#ffb020', sys:'You are a sharp critical skeptic who hunts for logical flaws, counterexamples and overlooked risks.'},
+  {name:'Pragmatic Executor', color:'#2bdb84', sys:'You are a pragmatic executor who cares only about feasibility, cost, steps and real-world constraints.'},
+]};
+function contextText(){
+  return messages.slice(-7,-1).map(m=>{
+    const txt = typeof m.content==='string' ? m.content : (m.content.find?.(c=>c.type==='text')?.text||t('imgTag'));
+    return (m.role==='user'?t('uLabel'):t('aLabel')) + txt.slice(0,400);
+  }).join('\n');
+}
+async function superThink(question){
+  const DEBATERS = DEBATERS_I18N[S.lang] || DEBATERS_I18N.zh;
+  const ctx = contextText();
+  const memP = await getMemoryPrompt();
+  const qBlock = (memP?memP+'\n\n':'') + (ctx?t('prevConv')+'\n'+ctx+'\n\n':'') + t('qLabel') + question;
+
+  // 辯論容器
+  const bubble = addMsg('ai', '', true);
+  bubble.classList.add('glow');
+  bubble.innerHTML = `<div class="dPhase">${t('phase1')}</div><div class="debate"></div>`;
+  const grid = bubble.querySelector('.debate');
+  const panels = DEBATERS.map(d=>{
+    const p = document.createElement('div');
+    p.className = 'dPanel live'; p.style.setProperty('--pc', d.color);
+    p.innerHTML = `<div class="dHead"><span class="dDot"></span><span style="color:${d.color}">${d.name}</span></div><div class="dBody"></div>`;
+    grid.appendChild(p);
+    return p.querySelector('.dBody');
+  });
+
+  // 思考型模型抑制(Qwen 支援 /no_think);序列 / 並行依設定
+  const noT = S.provider==='local' ? ' /no_think' : '';
+  const liveShow = i => (t,a)=>{
+    panels[i].innerHTML = a ? esc(a)
+      : '<i style="opacity:.55">💭 '+esc((t||'…').slice(-500))+'</i>';
+  };
+  const runBatch = async tasks => {
+    if(S.parallelThink) return Promise.all(tasks.map(f=>f()));
+    const out = [];
+    for(const f of tasks) out.push(await f());   // 逐一生成,硬體友善
+    return out;
+  };
+
+  // ROUND 1:出觀點
+  const r1 = await runBatch(DEBATERS.map((d,i)=> () => streamLLM(
+    [{role:'system', content:d.sys+t('debSuffix')},
+     {role:'user', content:qBlock+noT}],
+    {maxTokens:+$('maxt').value, temperature:0.9, onUpdate:liveShow(i)})));
+  if(r1.some(r=>r.aborted)) { finishDebate(); return null; }
+  // 沒有正式回答就拿思考內容墊底,避免空白
+  const v1 = r1.map(r=> r.answer || (r.think ? t('thinkSum')+r.think.slice(-300) : t('noView')));
+  v1.forEach((v,i)=>{ panels[i].innerHTML = esc(v); });
+
+  function finishDebate(){
+    bubble.classList.remove('glow');
+    bubble.querySelectorAll('.dPanel').forEach(p=>p.classList.remove('live'));
+  }
+
+  // FINAL:主持人結構化總結
+  bubble.querySelector('.dPhase').textContent = t('phaseFinal');
+  const transcript = DEBATERS.map((d,i)=>`【${d.name}】${v1[i]}`).join('\n\n');
+  const finalBubble = addMsg('ai','<span class="cursor"></span>');
+  finalBubble.classList.add('glow');
+  const fin = await streamLLM(
+    [{role:'system', content:t('modSys')},
+     {role:'user', content:qBlock+'\n\n'+t('modUser1')+'\n'+transcript+'\n\n'+t('modUser2')}],
+    {maxTokens:+$('maxt').value,
+     onUpdate:(tk,a)=>{ renderAssistant(finalBubble, tk, a, true); $('chat').scrollTop = $('chat').scrollHeight; }});
+  finishDebate();
+  renderAssistant(finalBubble, fin.think, fin.answer || t('onlyThink'), false);
+  finalBubble.classList.remove('glow');
+  return {transcript, final: fin};
+}
+
+/* ════ 傳送 ════ */
+async function send(){
+  let text = $('input').value.trim();
+  if((!text && !images.length) || busy) return;
+  $('input').value = '';
+  const skillMode = /^\/skill\b/i.test(text);
+  const thinkMode = /^\/think\b/i.test(text);
+  const searchMode = /^\/search\b/i.test(text);
+  if(skillMode || thinkMode || searchMode) text = text.replace(/^\/(skill|think|search)\s*/i,'');
+
+  const tag = skillMode ? '⚙ SKILL MODE' : thinkMode ? '🧠 SUPER THINK' : searchMode ? '🔍 WEB SEARCH' : '';
+  const uBubble = addMsg('user', (tag?`<div style="font-size:10px;color:var(--neon3);letter-spacing:.15em;margin-bottom:4px">${tag}</div>`:'')
+    + images.map(u=>`<img src="${u}">`).join('') + md(text));
+  let content;
+  if(images.length){
+    content = images.map(u=>({type:'image_url', image_url:{url:u}}));
+    content.push({type:'text', text: text || t('describeImg')});
+  } else content = text;
+  messages.push({role:'user', content});
+  addTools(uBubble, messages.length-1);
+  images = []; renderPreviews();
+
+  if(thinkMode){ await runThinkTurn(text); return; }
+  if(searchMode){ await runSearchTurn(text); return; }
+  await runTurn(skillMode);
+}
+
+/* ════ /search 網路搜尋回合 ════ */
+async function runSearchTurn(text){
+  setBusy(true); statReset();
+  const card = addMsg('ai','');
+  card.innerHTML = `<div class="skillCall" style="margin-top:0">${t('searchTitle')} <span class="args">${esc(text)}</span><div class="skRes">${t('searching')}</div></div>`;
+  let raw = [];
+  try{ raw = await (await fetch(BK+'/api/search?q='+encodeURIComponent(text))).json(); }catch{}
+  const errMsg = (raw||[]).find(r=>!r.url)?.title || '';
+  const results = (raw||[]).filter(r=>r.url);
+  const resEl = card.querySelector('.skRes');
+  if(!results.length){
+    resEl.innerHTML = '❌ ' + esc(errMsg || t('searchFail')) + t('searchFallback');
+  } else {
+    resEl.innerHTML = results.map((r,i)=>
+      `[${i+1}] <a href="${r.url}" target="_blank">${esc(r.title)}</a>${r.content?` <span style="color:var(--neon5)">${t('contentRead')}</span>`:''}<br><span style="color:var(--dim)">${esc((r.snippet||'').slice(0,160))}</span>`).join('<br>');
+  }
+  $('chat').scrollTop = $('chat').scrollHeight;
+  let ctx = results.map((r,i)=>`[${i+1}] ${r.title}\n${r.url}\n${t('snippetLb')}${r.snippet||''}`).join('\n\n');
+  if(!results.length){ await runTurn(false, ''); return; }
+
+  // 合併呼叫(思考全開):摘要夠 → 直接生成最終回答;不夠 → 只輸出「需要:編號」
+  // 搜尋結果附加在訊息尾端而非系統提示 → 前文 prompt 快取不會失效,省大量重算時間
+  const searchInstr = t('searchInstr1') + ctx + t('searchInstr2');
+  let sys = $('sysPrompt').value.trim();
+  const memP = await getMemoryPrompt();
+  if(memP) sys = (sys?sys+'\n\n':'')+memP;
+
+  const apiMsgs = [];
+  if(sys) apiMsgs.push({role:'system', content:sys});
+  apiMsgs.push(...messages.map(m=>({role:m.role, content:m.content})));
+  apiMsgs.push({role:'user', content:searchInstr});
+  const bubble = addMsg('ai','<span class="cursor"></span>');
+  bubble.classList.add('glow');
+  const res = await streamLLM(apiMsgs, {onUpdate:(t,a)=>{
+    renderAssistant(bubble, t, a, true); $('chat').scrollTop = $('chat').scrollHeight; }});
+
+  // 短輸出且符合「需要:N / NEED:N」格式 → 視為深讀請求
+  const dm = res.answer.trim().length < 60 ? res.answer.match(/(需要|NEED)\s*[::]?\s*([\d,,、\s]+)/i) : null;
+  if(!dm){
+    // 摘要已足夠,這就是最終回答(單次完成)
+    let fin = res.answer;
+    if(!fin && res.think) fin = t('onlyThink');
+    renderAssistant(bubble, res.think, fin || t('noResp'), false);
+    bubble.classList.remove('glow');
+    messages.push({role:'assistant', content: res.answer, reasoning: res.think || undefined});
+    addTools(bubble, messages.length-1);
+    resEl.insertAdjacentHTML('beforeend',`<br><span style="color:var(--neon5)">${t('sumEnough')}</span>`);
+    setBusy(false);
+    await saveChat();
+    memExtract(text, res.answer);
+    return;
+  }
+
+  // 不夠 → 撤掉暫時氣泡,抓指定內文後正式回答
+  bubble.closest('.msg').remove();
+  let need = [...dm[2].matchAll(/\d+/g)].map(m=>+m[0]).filter(n=>n>=1 && n<=results.length).slice(0,3);
+  if(!need.length) need = [1,2,3].filter(n=>n<=results.length);
+  resEl.insertAdjacentHTML('beforeend',`<br><span style="color:var(--neon4)">${t('deepRead1')}${need.join(', ')}${t('deepRead2')}</span>`);
+  await Promise.all(need.map(async n=>{
+    try{
+      const p = await (await fetch(BK+'/api/fetch_page?url='+encodeURIComponent(results[n-1].url))).json();
+      if(p.ok && p.content) results[n-1].content = p.content;
+    }catch{}
+  }));
+  const got = need.filter(n=>results[n-1].content);
+  resEl.insertAdjacentHTML('beforeend', got.length
+    ? `<br><span style="color:var(--neon5)">${t('gotRead1')}${got.join(', ')}${t('gotRead2')}</span>`
+    : `<br><span style="color:var(--dim)">${t('readFailFb')}</span>`);
+  $('chat').scrollTop = $('chat').scrollHeight;
+  ctx = results.map((r,i)=>`[${i+1}] ${r.title}\n${r.url}\n${t('snippetLb')}${r.snippet||''}`
+    + (r.content ? '\n'+t('contentLb')+r.content : '')).join('\n\n');
+  await runTurn(false, t('searchFinalSys')+ctx);
+}
+
+/* ════ /think 回合(傳送與重送共用)════ */
+async function runThinkTurn(text){
+  setBusy(true); statReset();
+  const res = await superThink(text);
+  if(res) messages.push({role:'assistant', content: res.final.answer,
+    reasoning: res.final.think || undefined, debate: res.transcript});
+  setBusy(false);
+  await saveChat();
+  if(res) memExtract(text, res.final.answer);
+}
+
+/* ════ 執行一輪 AI 回合(傳送 / 重送 / 重新生成共用)════ */
+async function runTurn(skillMode=false, extraCtx=''){
+  setBusy(true); statReset();
+  let sys = $('sysPrompt').value.trim();
+  const memP = await getMemoryPrompt();
+  if(memP) sys = (sys ? sys+'\n\n' : '') + memP;
+  if(skillMode){
+    const sp = await getSkillPrompt();
+    sys = (sys ? sys+'\n\n' : '') + sp;
+  }
+
+  let rounds = 0;
+  while(true){
+    const apiMsgs = [];
+    if(sys) apiMsgs.push({role:'system', content:sys});
+    apiMsgs.push(...messages.map(m=>({role:m.role, content:m.content})));
+    // 補充資料(搜尋內文等)附加在尾端,保持前文快取命中
+    if(extraCtx) apiMsgs.push({role:'user', content:t('extraCtxHdr')+extraCtx});
+
+    const bubble = addMsg('ai', '<span class="cursor"></span>');
+    bubble.classList.add('glow');
+    const {think, answer, aborted} = await streamLLM(apiMsgs, {
+      onUpdate:(t,a)=>{ renderAssistant(bubble, t, a, true); $('chat').scrollTop = $('chat').scrollHeight; }});
+    const call = (!aborted && skillMode) ? extractSkillCall(answer) : null;
+
+    if(!call){
+      let fin = answer;
+      if(!fin && think) fin = t('onlyThink');
+      renderAssistant(bubble, think, fin || t('noResp'), false);
+      bubble.classList.remove('glow');
+      messages.push({role:'assistant', content: answer, reasoning: think || undefined});
+      addTools(bubble, messages.length-1);
+      break;
+    }
+
+    renderAssistant(bubble, think, '', false);
+    bubble.insertAdjacentHTML('beforeend',
+      `<div class="skillCall">🛠 ${esc(call.skill)} <span class="args">${esc(JSON.stringify(call.args||{}))}</span><div class="skRes">${t('running')}</div></div>`);
+    bubble.classList.remove('glow');
+    messages.push({role:'assistant', content: answer, reasoning: think || undefined});
+
+    let result;
+    try{
+      const r = await fetch(BK+'/api/skills/run', {method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({name: call.skill, args: call.args||{}})});
+      result = await r.json();
+    }catch(e){ result = {ok:false, text:t('backendDown')+e.message}; }
+
+    const resEl = bubble.querySelector('.skillCall:last-of-type .skRes');
+    let resHtml = (result.ok?'✅ ':'❌ ') + esc((result.text||'').slice(0,1500));
+    if(result.image_url) resHtml += `<img src="${result.image_url}">`;
+    resEl.innerHTML = resHtml;
+    $('chat').scrollTop = $('chat').scrollHeight;
+
+    messages.push({role:'user', content:'[工具結果] '+(result.ok?t('toolOk'):t('toolFail'))+'\n'+(result.text||'')});
+    if(++rounds >= 4){ addMsg('ai', md(t('toolLimit'))); break; }
+  }
+  setBusy(false);
+  await saveChat();   // 整份 messages 覆寫回 chat.json,編輯/截斷自動同步
+  const lastU = [...messages].reverse().find(m=>m.role==='user'
+    && !(typeof m.content==='string' && m.content.startsWith('[工具結果]')));
+  const uTxt = lastU ? (typeof lastU.content==='string' ? lastU.content
+    : (lastU.content.find?.(c=>c.type==='text')?.text || '')) : '';
+  const lastAi = [...messages].reverse().find(m=>m.role==='assistant');
+  memExtract(uTxt, lastAi?.content);
+}
+$('send').onclick = send;
+$('stop').onclick = () => { stopAll = true; controllers.forEach(c=>c.abort()); };   // 一鍵全停
+/* ════ 指令快捷選單(輸入 / 喚出,↑↓ 選、Tab/Enter 補全)════ */
+const COMMANDS = [{cmd:'/skill'},{cmd:'/think'},{cmd:'/search'}];
+let cmdSel = 0, cmdItems = [];
+function cmdMenuEl(){
+  let m = $('cmdMenu');
+  if(!m){ m = document.createElement('div'); m.id = 'cmdMenu';
+    document.querySelector('.composer').prepend(m); }
+  return m;
+}
+function updateCmdMenu(){
+  const match = $('input').value.match(/^\/(\w*)$/);
+  const menu = cmdMenuEl();
+  if(!match){ menu.style.display='none'; cmdItems=[]; return; }
+  cmdItems = COMMANDS.filter(c=>c.cmd.slice(1).startsWith(match[1].toLowerCase()));
+  if(!cmdItems.length){ menu.style.display='none'; return; }
+  cmdSel = Math.min(cmdSel, cmdItems.length-1);
+  menu.style.display = 'block';
+  menu.innerHTML = cmdItems.map((c,i)=>
+    `<div class="cmdItem${i===cmdSel?' sel':''}" data-i="${i}"><b>${c.cmd}</b><span>${t('cmd_'+c.cmd.slice(1))}</span></div>`).join('');
+  menu.querySelectorAll('.cmdItem').forEach(el=>{
+    el.onmousedown = e=>{ e.preventDefault(); pickCmd(+el.dataset.i); };
+  });
+}
+function pickCmd(i){
+  $('input').value = cmdItems[i].cmd + ' ';
+  cmdMenuEl().style.display='none'; cmdItems=[];
+  $('input').focus();
+}
+function cmdMenuKey(e){
+  if(!cmdItems.length || cmdMenuEl().style.display==='none') return false;
+  if(e.key==='ArrowDown'){ cmdSel=(cmdSel+1)%cmdItems.length; updateCmdMenu(); e.preventDefault(); return true; }
+  if(e.key==='ArrowUp'){ cmdSel=(cmdSel-1+cmdItems.length)%cmdItems.length; updateCmdMenu(); e.preventDefault(); return true; }
+  if(e.key==='Tab' || e.key==='Enter'){ e.preventDefault(); pickCmd(cmdSel); return true; }
+  if(e.key==='Escape'){ cmdMenuEl().style.display='none'; cmdItems=[]; return true; }
+  return false;
+}
+$('input').addEventListener('input', updateCmdMenu);
+$('input').addEventListener('blur', ()=>setTimeout(()=>{ cmdMenuEl().style.display='none'; },150));
+$('input').addEventListener('keydown', e=>{
+  if(cmdMenuKey(e)) return;
+  if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); }
+});
+
+/* ════ 圖片 ════ */
+function addImage(file){
+  if(!file || !file.type.startsWith('image/')) return;
+  const fr = new FileReader();
+  fr.onload = () => { images.push(fr.result); renderPreviews(); };
+  fr.readAsDataURL(file);
+}
+function renderPreviews(){
+  $('previews').innerHTML = images.map((u,i)=>
+    `<div class="thumb"><img src="${u}"><button class="x" onclick="removeImg(${i})">✕</button></div>`).join('');
+}
+window.removeImg = i => { images.splice(i,1); renderPreviews(); };
+$('imgBtn').onclick = () => $('imgFile').click();
+$('imgFile').onchange = e => { [...e.target.files].forEach(addImage); e.target.value=''; };
+document.addEventListener('paste', e => [...e.clipboardData.items].forEach(it=>{ if(it.type.startsWith('image/')) addImage(it.getAsFile()); }));
+const mainEl = document.querySelector('.main');
+mainEl.addEventListener('dragover', e=>{e.preventDefault();mainEl.classList.add('drop')});
+mainEl.addEventListener('dragleave', ()=>mainEl.classList.remove('drop'));
+mainEl.addEventListener('drop', e=>{e.preventDefault();mainEl.classList.remove('drop');[...e.dataTransfer.files].forEach(addImage)});
+
+/* ════ 對話紀錄(server.py 自動存 chats/編號/chat.json)════ */
+function chatTitle(){
+  const m = messages.find(m=>m.role==='user');
+  if(!m) return t('emptyChatTitle');
+  const txt = typeof m.content==='string' ? m.content : (m.content.find(c=>c.type==='text')?.text || t('imgTag'));
+  return txt.slice(0,30);
+}
+async function saveChat(){
+  if(!messages.length) return;
+  const data = {title:chatTitle(), updated:new Date().toISOString(),
+    system:$('sysPrompt').value, messages};
+  try{
+    if(!chatId){
+      const r = await fetch(BK+'/api/chats', {method:'POST',
+        headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+      chatId = (await r.json()).id;
+    }else{
+      await fetch(BK+'/api/chats/'+chatId, {method:'PUT',
+        headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+    }
+  }catch(e){ console.warn('存檔失敗(server.py 沒在跑?)', e); }
+  refreshChatList();
+}
+function fmtTime(iso){
+  if(!iso) return '';
+  const d = new Date(iso), p = n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}/${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+async function refreshChatList(){
+  let items = [];
+  try{ items = await (await fetch(BK+'/api/chats')).json(); }catch{}
+  const el = $('chatList'); el.innerHTML='';
+  if(!items.length){ el.innerHTML = `<div class="listEmpty">${t('chatListEmpty')}</div>`; return; }
+  for(const it of items){
+    const d = document.createElement('div');
+    d.className = 'chatItem' + (it.id===chatId?' active':'');
+    d.innerHTML = `<div class="info"><div class="t"></div><div class="d">#${it.id} · ${fmtTime(it.updated)}</div></div>
+      <button class="del" title="${t('delTip')}">🗑</button>`;
+    d.querySelector('.t').textContent = it.title || it.id;
+    d.title = busy ? t('busyTip') : '';
+    d.onclick = () => {
+      if(busy){ window.open('?chat='+it.id, '_blank', 'width=1280,height=820'); return; }   // 生成中 → 新視窗開啟
+      loadChat(it.id);
+    };
+    d.querySelector('.del').onclick = async e => {
+      e.stopPropagation();
+      if(!confirm(t('confirmDel')+it.id+'?')) return;
+      try{ await fetch(BK+'/api/chats/'+it.id, {method:'DELETE'}); }catch{}
+      if(it.id===chatId) $('newChat').click(); else refreshChatList();
+    };
+    el.appendChild(d);
+  }
+}
+async function loadChat(id){
+  if(busy) return;
+  let data;
+  try{ data = await (await fetch(BK+'/api/chats/'+id)).json(); }catch{ return; }
+  if(!data || data.error) return;
+  chatId = id; messages = data.messages || [];
+  $('sysPrompt').value = data.system || '';
+  renderAll();
+  refreshChatList();
+}
+$('newChat').onclick = () => {
+  if(busy) return;
+  messages = []; chatId = null;
+  $('chat').innerHTML = emptyHtml();
+  refreshChatList();
+};
+applySettings();
+applyLang();
+refreshChatList();
+/* ?chat=編號 → 直接開啟該對話(供生成中開新視窗用) */
+const urlChat = new URLSearchParams(location.search).get('chat');
+if(urlChat) loadChat(urlChat);
+</script>
+</body>
+</html>

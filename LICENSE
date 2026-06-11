@@ -1,0 +1,56 @@
+ZHANGAI Non-Commercial Open License (ZNC-1.0)
+Copyright (c) 2026 Chris Zhang. All Rights Reserved.
+
+中文版(與英文版具同等效力,歧義時以中文版為準)
+============================================================
+
+授權範圍
+在遵守以下條款的前提下,任何人可以免費地:
+  1. 使用 — 為個人、學術、研究或其他非商業目的使用本軟體。
+  2. 拷貝與散布 — 複製並分享本軟體的原始或修改版本。
+  3. 修改 — 修改本軟體並建立衍生作品。
+  4. 參與開源 — 透過 Issue、Pull Request 等方式參與本專案開發;
+     貢獻內容視為以本授權條款授權給專案使用。
+
+條件
+  A. 署名(必要)— 任何原始或修改後的版本,必須在「前端使用者
+     介面的可見處」保留原作者署名「Chris Zhang」(例如設定頁面
+     或頁尾)。同時須在原始碼中保留本授權檔案。
+  B. 非商業 — 不得將本軟體或其衍生作品用於商業目的,包括但不限
+     於:銷售、付費授權、付費訂閱服務、廣告營利、或作為商業產品
+     /服務的一部分。如需商業授權,請聯繫原作者另行取得書面同意。
+  C. 相同方式分享 — 散布修改版本時,必須採用本授權條款。
+
+免責聲明
+本軟體按「現狀」提供,不附帶任何明示或暗示的保證,包括但不限於
+適售性、特定用途適用性與不侵權之保證。作者不對因使用本軟體而產
+生的任何索賠、損害或其他責任負責。本軟體可載入任意第三方模型,
+模型之輸出內容由使用者自行負責。
+
+English Version
+============================================================
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software, to use, copy, distribute, and modify the
+software and to participate in its development (via issues, pull
+requests, etc.), subject to the following conditions:
+
+  A. ATTRIBUTION (required) — Any original or modified version MUST
+     retain the original author credit "Chris Zhang" in a visible
+     place of the front-end user interface (e.g. settings page or
+     footer), and this LICENSE file must be kept in the source.
+  B. NON-COMMERCIAL — The software and derivative works may NOT be
+     used for commercial purposes, including but not limited to
+     selling, paid licensing, paid subscription services, advertising
+     monetization, or inclusion in commercial products or services.
+     Contact the author for a separate written commercial license.
+  C. SHARE-ALIKE — Distributed modified versions must be licensed
+     under these same terms.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM THE USE OF THE
+SOFTWARE. Outputs of any third-party models loaded into this software
+are the sole responsibility of the user.
