@@ -216,6 +216,17 @@ kbd{font-family:var(--mono);background:var(--panel2);border:1px solid var(--bord
 .cmdTable td{padding:7px 8px;border-bottom:1px solid var(--border);vertical-align:top}
 .cmdTable td:first-child{font-family:var(--mono);color:var(--neon2);white-space:nowrap}
 #memList{font-size:12px;color:var(--dim);max-height:140px;overflow-y:auto;margin:8px 0;line-height:1.7}
+/* ── 主題選擇器 ── */
+.themeGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}
+.themeSwatch{cursor:pointer;border:1px solid var(--border);border-radius:11px;padding:7px;background:var(--panel2);
+  display:flex;flex-direction:column;gap:6px;align-items:stretch;transition:transform .15s,border-color .15s,box-shadow .15s}
+.themeSwatch:hover{transform:translateY(-2px);border-color:var(--neon1);box-shadow:0 6px 18px rgba(0,0,0,.3)}
+.themeSwatch.active{border-color:var(--neon1);box-shadow:0 0 14px rgba(108,92,255,.45)}
+.themeSwatch .sw{height:34px;border-radius:8px;border:1px solid rgba(255,255,255,.1);position:relative;overflow:hidden}
+.themeSwatch .sw i{position:absolute;width:13px;height:13px;border-radius:50%;bottom:5px;border:1px solid rgba(0,0,0,.25)}
+.themeSwatch .nm{font-size:11px;color:var(--text);text-align:center;letter-spacing:.04em}
+.themeSwatch.active .nm{color:var(--neon2);text-shadow:0 0 8px var(--neon2)}
+@media(max-width:560px){.themeGrid{grid-template-columns:repeat(2,1fr)}}
 ::-webkit-scrollbar{width:8px}
 ::-webkit-scrollbar-thumb{background:rgba(120,150,255,.2);border-radius:4px}
 @media(max-width:860px){.side{display:none}.debate{grid-template-columns:1fr}}
@@ -237,6 +248,7 @@ kbd{font-family:var(--mono);background:var(--panel2);border:1px solid var(--bord
       <h3 data-i18n="hChats">對話紀錄</h3>
       <button class="btn full primary" id="newChat" data-i18n="btnNew">✦ 新對話</button>
       <div id="folderState" data-i18n="folderState">自動存檔至 chats/ 編號資料夾</div>
+      <input class="txt" id="chatSearch" data-i18n-ph="phChatSearch" placeholder="Search chats…" style="margin:10px 0 0;font-family:inherit">
       <div style="height:10px"></div>
       <div id="chatList"></div>
     </div>
@@ -280,11 +292,21 @@ kbd{font-family:var(--mono);background:var(--panel2);border:1px solid var(--bord
         </div>
       </section>
       <section>
+        <h3 data-i18n="hTheme">外觀主題</h3>
+        <div class="themeGrid" id="themeGrid"></div>
+      </section>
+      <section>
         <h3 data-i18n="hProvider">模型來源</h3>
         <div class="provRow">
           <label><input type="radio" name="prov" value="local" checked> <span data-i18n="provLocal">🖥 本地模型</span></label>
           <label><input type="radio" name="prov" value="gemini"> ✨ Gemini</label>
           <label><input type="radio" name="prov" value="deepseek"> 🐳 DeepSeek</label>
+        </div>
+        <div class="provBox" id="provLocal">
+          <div style="display:flex;gap:8px">
+            <select class="txt" id="localModel" style="flex:1;margin-bottom:0"></select>
+            <button class="btn" id="reloadEngine" title="restart engine">🔄</button>
+          </div>
         </div>
         <div class="provBox" id="provGemini">
           <input class="txt" id="geminiKey" type="password" placeholder="Gemini API Key (AIza…)">
@@ -323,10 +345,19 @@ kbd{font-family:var(--mono);background:var(--panel2);border:1px solid var(--bord
           <label class="toggle"><input type="checkbox" id="memRead"><i></i></label>
         </div>
         <div id="memList" data-i18n="memEmpty">(no memories yet)</div>
-        <button class="btn danger" id="memClear" data-i18n="btnMemClear">清除全部記憶</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn" id="memConsolidate" data-i18n="memConsolidate">🧹 整理合併記憶</button>
+          <button class="btn danger" id="memClear" data-i18n="btnMemClear">清除全部記憶</button>
+        </div>
       </section>
       <section>
         <h3 data-i18n="hCommands">指令列表</h3>
+        <div class="tgRow">
+          <div class="desc"><b data-i18n="allowAbsT">允許 Skill 存取專案外檔案</b><span data-i18n="allowAbsD">Skill 預設只能讀寫專案資料夾;開啟後可用絕對路徑存取整台電腦(有風險)</span></div>
+          <label class="toggle"><input type="checkbox" id="allowAbs"><i></i></label>
+        </div>
+        <button class="btn" id="reloadSkills" data-i18n="reloadSkills">🔄 重新載入 Skills</button>
+        <div style="height:10px"></div>
         <table class="cmdTable" id="cmdStatic"></table>
         <div style="height:8px"></div>
         <table class="cmdTable" id="skillTable"></table>
@@ -348,9 +379,52 @@ let controllers = [], busy = false, stopAll = false;
 /* ════ 設定 ════ */
 const S = Object.assign({provider:'local', geminiKey:'', geminiModel:'', dsKey:'', dsModel:'',
   temp:0.7, topp:0.95, maxt:4096, sys:'', memWrite:false, memRead:false, parallelThink:false,
-  lang:'en'},   // default English; switchable in Settings
+  allowAbs:false, lang:'en', theme:'aurora'},   // default English + Aurora theme; switchable in Settings
   JSON.parse(localStorage.getItem('zh_settings')||'{}'));
 function saveS(){ localStorage.setItem('zh_settings', JSON.stringify(S)); }
+
+/* ════ 內建前端主題(CONFIG 可切換)════
+   每個主題覆寫 :root 的 CSS 變數;--grad 仍由 --neon1/--neon2 自動推導,
+   --pdot/--pline 為粒子背景的 r,g,b 色值。 */
+const THEMES = {
+  aurora:    {name:'Aurora',    vars:{'--bg':'#07090f','--panel':'rgba(18,22,34,.72)','--panel2':'rgba(28,34,52,.6)','--border':'rgba(120,150,255,.14)','--text':'#dfe6f5','--dim':'#7b86a3','--neon1':'#6c5cff','--neon2':'#00d4ff','--neon3':'#ff4ecd','--neon4':'#ffb020','--neon5':'#2bdb84','--pdot':'110,140,255','--pline':'108,92,255'}},
+  synthwave: {name:'Synthwave', vars:{'--bg':'#0d0717','--panel':'rgba(30,16,46,.72)','--panel2':'rgba(46,24,64,.6)','--border':'rgba(255,80,210,.16)','--text':'#ffe6fb','--dim':'#b07bb8','--neon1':'#ff2bd6','--neon2':'#7a5cff','--neon3':'#ff6ec7','--neon4':'#ffcf40','--neon5':'#2bdbc4','--pdot':'255,80,210','--pline':'122,92,255'}},
+  matrix:    {name:'Matrix',    vars:{'--bg':'#03100a','--panel':'rgba(8,26,18,.72)','--panel2':'rgba(12,38,26,.6)','--border':'rgba(46,230,120,.16)','--text':'#c8ffe0','--dim':'#5f9c78','--neon1':'#19e676','--neon2':'#00ffaa','--neon3':'#7dff5e','--neon4':'#d4ff40','--neon5':'#2bdb84','--pdot':'46,230,120','--pline':'0,255,150'}},
+  ocean:     {name:'Ocean',     vars:{'--bg':'#04111a','--panel':'rgba(10,28,42,.72)','--panel2':'rgba(14,40,58,.6)','--border':'rgba(60,180,230,.16)','--text':'#d6f0fb','--dim':'#6f9bb0','--neon1':'#1e9fff','--neon2':'#00e0d4','--neon3':'#4ecdff','--neon4':'#ffd24e','--neon5':'#2bdb84','--pdot':'60,180,230','--pline':'30,159,255'}},
+  crimson:   {name:'Crimson',   vars:{'--bg':'#120607','--panel':'rgba(40,14,18,.72)','--panel2':'rgba(56,20,26,.6)','--border':'rgba(255,90,90,.16)','--text':'#ffe0e0','--dim':'#b07b80','--neon1':'#ff3b3b','--neon2':'#ff8a3b','--neon3':'#ff5e8a','--neon4':'#ffcf40','--neon5':'#ff6b4e','--pdot':'255,90,90','--pline':'255,59,59'}},
+  nord:      {name:'Nord',      vars:{'--bg':'#11151c','--panel':'rgba(34,42,54,.72)','--panel2':'rgba(46,56,70,.6)','--border':'rgba(140,170,200,.16)','--text':'#e5ecf5','--dim':'#8794a8','--neon1':'#88c0d0','--neon2':'#81a1c1','--neon3':'#b48ead','--neon4':'#ebcb8b','--neon5':'#a3be8c','--pdot':'140,170,200','--pline':'136,192,208'}},
+  gold:      {name:'Gold',      vars:{'--bg':'#0c0a05','--panel':'rgba(28,24,14,.72)','--panel2':'rgba(40,34,18,.6)','--border':'rgba(220,180,90,.18)','--text':'#f5ecd6','--dim':'#a8966f','--neon1':'#e8b923','--neon2':'#ffd96e','--neon3':'#ff9f40','--neon4':'#ffe9a0','--neon5':'#c4a32b','--pdot':'220,180,90','--pline':'232,185,35'}},
+  daylight:  {name:'Daylight',  vars:{'--bg':'#eef1f7','--panel':'rgba(255,255,255,.82)','--panel2':'rgba(232,238,248,.85)','--border':'rgba(60,90,160,.18)','--text':'#1c2433','--dim':'#5a6478','--neon1':'#5b6cff','--neon2':'#0098d4','--neon3':'#d63ca0','--neon4':'#e08a00','--neon5':'#1d9e5e','--pdot':'90,108,200','--pline':'91,108,255'}},
+};
+let PARTICLE = {dot:'110,140,255', line:'108,92,255'};   // 由 applyTheme 即時更新
+function applyTheme(){
+  const th = THEMES[S.theme] || THEMES.aurora;
+  const r = document.documentElement;
+  for(const [k,v] of Object.entries(th.vars)){
+    if(k==='--pdot') PARTICLE.dot = v;
+    else if(k==='--pline') PARTICLE.line = v;
+    else r.style.setProperty(k, v);
+  }
+  document.querySelectorAll('.themeSwatch').forEach(el=>
+    el.classList.toggle('active', el.dataset.theme===S.theme));
+}
+function renderThemes(){
+  const grid = document.getElementById('themeGrid');
+  if(!grid) return;
+  grid.innerHTML = Object.entries(THEMES).map(([id,th])=>{
+    const v = th.vars;
+    return `<div class="themeSwatch${id===S.theme?' active':''}" data-theme="${id}">
+      <div class="sw" style="background:linear-gradient(135deg,${v['--bg']} 0%,${v['--neon1']} 60%,${v['--neon2']} 100%)">
+        <i style="left:6px;background:${v['--neon3']}"></i>
+        <i style="left:23px;background:${v['--neon4']}"></i>
+        <i style="left:40px;background:${v['--neon5']}"></i>
+      </div>
+      <div class="nm">${th.name}</div></div>`;
+  }).join('');
+  grid.querySelectorAll('.themeSwatch').forEach(el=>el.onclick=()=>{
+    S.theme = el.dataset.theme; saveS(); applyTheme();
+  });
+}
 
 /* ════ i18n ════ */
 const I18N = {
@@ -362,7 +436,7 @@ zh:{
   inputPh:'輸入訊息…(輸入 / 喚出指令選單)',
   btnSend:'傳送 ➤', btnStop:'■ 停止',
   hint:'<kbd>Enter</kbd> 傳送 · <kbd>Shift+Enter</kbd> 換行 · <kbd>Ctrl+V</kbd> 貼圖 · 輸入 <kbd>/</kbd> 喚出指令選單,<kbd>Tab</kbd> 補全',
-  hSettings:'⚙ 設定', hProvider:'模型來源', provLocal:'🖥 本地模型',
+  hSettings:'⚙ 設定', hTheme:'外觀主題', hProvider:'模型來源', provLocal:'🖥 本地模型',
   phGeminiModel:'模型名稱(預設 gemini-2.5-flash)', phDsModel:'模型名稱(預設 deepseek-chat)',
   hParams:'推論參數', pthinkT:'/think 四路並行',
   pthinkD:'同時生成四位辯手。本地模型需在啟動腳本加 -np 4 且 VRAM 足夠;關閉則逐一生成(較穩)',
@@ -401,6 +475,13 @@ zh:{
   thinkSum:'(思考摘要)', noView:'(無觀點)',
   prevConv:'先前對話:', qLabel:'問題:', uLabel:'使用者:', aLabel:'AI:',
   debateLog:'🧠 辯論紀錄',
+  phChatSearch:'搜尋對話…', exportTip:'匯出 Markdown',
+  memConsolidate:'🧹 整理合併記憶', memConsolidated:'🧹 記憶整理完成:',
+  allowAbsT:'允許 Skill 存取專案外檔案',
+  allowAbsD:'Skill 預設只能讀寫專案資料夾;開啟後可用絕對路徑存取整台電腦(有風險)',
+  reloadSkills:'🔄 重新載入 Skills', reloadedSkills:'已載入工具:',
+  engineRestart:'🔄 引擎重啟中,模型載入需要一點時間…',
+  noModels:'(model/ 內找不到 GGUF)',
   memInject:'【系統記憶】以下是過往累積的使用者背景資料,僅供你回答時參考。切勿在回覆中列出、複述或提及這份清單:\n',
   skillSys1:'你可以呼叫本地工具。需要使用工具時,只輸出一行 JSON,不要加任何其他文字:\n{"skill":"工具名","args":{"參數":"值"}}\n可用工具:\n',
   skillSys2:'\n系統執行後會以「[工具結果]」訊息回傳,你再根據結果繼續呼叫工具或用自然語言給最終回答。若不需要工具,直接正常回答。',
@@ -421,7 +502,7 @@ en:{
   inputPh:'Type a message… (type / for command menu)',
   btnSend:'Send ➤', btnStop:'■ Stop',
   hint:'<kbd>Enter</kbd> send · <kbd>Shift+Enter</kbd> newline · <kbd>Ctrl+V</kbd> paste image · type <kbd>/</kbd> for command menu, <kbd>Tab</kbd> to complete',
-  hSettings:'⚙ Settings', hProvider:'Model Source', provLocal:'🖥 Local model',
+  hSettings:'⚙ Settings', hTheme:'Theme', hProvider:'Model Source', provLocal:'🖥 Local model',
   phGeminiModel:'Model name (default gemini-2.5-flash)', phDsModel:'Model name (default deepseek-chat)',
   hParams:'Inference Params', pthinkT:'/think parallel mode',
   pthinkD:'Generate all four debaters at once. Local engine needs -np 4 in the start script and enough VRAM; off = one-by-one (safer)',
@@ -460,6 +541,13 @@ en:{
   thinkSum:'(reasoning summary)', noView:'(no view)',
   prevConv:'Previous conversation:', qLabel:'Question: ', uLabel:'User: ', aLabel:'AI: ',
   debateLog:'🧠 Debate transcript',
+  phChatSearch:'Search chats…', exportTip:'Export Markdown',
+  memConsolidate:'🧹 Consolidate memories', memConsolidated:'🧹 Memories consolidated: ',
+  allowAbsT:'Allow skills outside project folder',
+  allowAbsD:'Skills are sandboxed to the project folder by default; enabling this allows absolute paths anywhere on this computer (risky)',
+  reloadSkills:'🔄 Reload skills', reloadedSkills:'Tools loaded: ',
+  engineRestart:'🔄 Engine restarting — model loading takes a moment…',
+  noModels:'(no GGUF found in model/)',
   memInject:'[System memory] Background facts about the user from past chats. Reference only — never list, repeat, or mention this list in replies:\n',
   skillSys1:'You can call local tools. When you need one, output exactly one line of JSON and nothing else:\n{"skill":"tool_name","args":{"param":"value"}}\nAvailable tools:\n',
   skillSys2:'\nThe system will reply with a "[工具結果]" message containing the result; then either call another tool or give the final answer in natural language. If no tool is needed, just answer normally.',
@@ -494,8 +582,59 @@ function applySettings(){
   $('sysPrompt').value=S.sys;
   $('memWrite').checked=S.memWrite; $('memRead').checked=S.memRead;
   $('parallelThink').checked=S.parallelThink;
+  $('allowAbs').checked=S.allowAbs;
+  $('provLocal').classList.toggle('show', S.provider==='local');
 }
-$('openSettings').onclick = ()=>{ $('settingsOverlay').classList.add('open'); renderMemList(); renderSkillTable(); };
+$('openSettings').onclick = ()=>{ $('settingsOverlay').classList.add('open'); renderMemList(); renderSkillTable(); loadModels(); };
+/* ── 本地模型清單 / 引擎熱切換 ── */
+async function loadModels(){
+  try{
+    const list = await (await fetch(BK+'/api/models')).json();
+    const sel = $('localModel');
+    sel.innerHTML = list.length
+      ? list.map(m=>`<option value="${esc(m.name)}" ${m.current?'selected':''}>${esc(m.name)} (${(m.size/1e9).toFixed(1)} GB)</option>`).join('')
+      : `<option value="">${t('noModels')}</option>`;
+  }catch{}
+}
+async function restartEngine(){
+  const name = $('localModel').value;
+  if(!name) return;
+  toast(t('engineRestart'));
+  try{
+    await fetch(BK+'/api/engine/restart', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body:JSON.stringify({model:name})});
+    $('modelName').textContent='—'; ping();
+  }catch{}
+}
+$('localModel').addEventListener('change', restartEngine);
+$('reloadEngine').onclick = restartEngine;
+$('allowAbs').addEventListener('change', e=>{ S.allowAbs=e.target.checked; saveS(); });
+$('reloadSkills').onclick = async ()=>{
+  try{
+    const r = await (await fetch(BK+'/api/skills/reload', {method:'POST'})).json();
+    skillCatalog = null;          // 清掉快取的工具提示
+    renderSkillTable();
+    toast(t('reloadedSkills') + (r.count ?? '?'));
+  }catch{ toast('⚠ reload failed'); }
+};
+$('memConsolidate').onclick = async ()=>{
+  toast('🧹 …');
+  try{
+    const r = await (await fetch(BK+'/api/memory/consolidate', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({provider:S.provider, lang:S.lang,
+        api_key: S.provider==='gemini'?S.geminiKey:S.provider==='deepseek'?S.dsKey:'',
+        model: S.provider==='gemini'?(S.geminiModel||'gemini-2.5-flash')
+             : S.provider==='deepseek'?(S.dsModel||'deepseek-chat'):''})})).json();
+    if(r.ok) toast(t('memConsolidated')+r.before+' → '+r.after);
+    else toast('⚠ '+(r.error||'failed'));
+    renderMemList();
+  }catch{ toast('⚠ failed'); }
+};
+$('chatSearch').addEventListener('input', ()=>{
+  clearTimeout($('chatSearch')._t);
+  $('chatSearch')._t = setTimeout(()=>refreshChatList($('chatSearch').value.trim()), 300);
+});
 $('closeSettings').onclick = ()=> $('settingsOverlay').classList.remove('open');
 $('settingsOverlay').addEventListener('click', e=>{ if(e.target.id==='settingsOverlay') e.target.classList.remove('open'); });
 document.querySelectorAll('input[name=prov]').forEach(r=>r.addEventListener('change', ()=>{
@@ -525,7 +664,16 @@ async function renderMemList(){
   try{
     const m = await (await fetch(BK+'/api/memory')).json();
     $('memList').innerHTML = m.facts?.length
-      ? m.facts.map(f=>'• '+esc(f.text)).join('<br>') : t('memEmpty');
+      ? m.facts.map((f,i)=>`<div style="display:flex;gap:6px;align-items:baseline">
+          <span style="flex:1">• ${esc(f.text)}</span>
+          <button data-mi="${i}" style="border:none;background:none;color:var(--dim);cursor:pointer">🗑</button></div>`).join('')
+      : t('memEmpty');
+    $('memList').querySelectorAll('button[data-mi]').forEach(b=>{
+      b.onclick = async ()=>{
+        try{ await fetch(BK+'/api/memory/'+b.dataset.mi, {method:'DELETE'}); }catch{}
+        renderMemList();
+      };
+    });
   }catch{ $('memList').textContent = t('memFailRead'); }
 }
 $('memClear').onclick = async ()=>{
@@ -582,13 +730,13 @@ async function memExtract(userText, aiText){
       if(p.x<0||p.x>W) p.vx*=-1;
       if(p.y<0||p.y>H) p.vy*=-1;
       cx.beginPath(); cx.arc(p.x,p.y,p.r,0,7);
-      cx.fillStyle='rgba(110,140,255,.5)'; cx.fill();
+      cx.fillStyle=`rgba(${PARTICLE.dot},.5)`; cx.fill();
     }
     for(let i=0;i<pts.length;i++) for(let j=i+1;j<pts.length;j++){
       const a=pts[i],b=pts[j],dx=a.x-b.x,dy=a.y-b.y,d=dx*dx+dy*dy;
       if(d<130*130){
         cx.beginPath(); cx.moveTo(a.x,a.y); cx.lineTo(b.x,b.y);
-        cx.strokeStyle=`rgba(108,92,255,${.16*(1-d/(130*130))})`; cx.stroke();
+        cx.strokeStyle=`rgba(${PARTICLE.line},${.16*(1-d/(130*130))})`; cx.stroke();
       }
     }
     requestAnimationFrame(tick);
@@ -1121,7 +1269,7 @@ async function runTurn(skillMode=false, extraCtx=''){
     try{
       const r = await fetch(BK+'/api/skills/run', {method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({name: call.skill, args: call.args||{}})});
+        body: JSON.stringify({name: call.skill, args: call.args||{}, allow_abs: S.allowAbs})});
       result = await r.json();
     }catch(e){ result = {ok:false, text:t('backendDown')+e.message}; }
 
@@ -1236,23 +1384,29 @@ function fmtTime(iso){
   const d = new Date(iso), p = n=>String(n).padStart(2,'0');
   return `${d.getFullYear()}/${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
-async function refreshChatList(){
+async function refreshChatList(q){
+  if(q === undefined) q = $('chatSearch')?.value.trim() || '';
   let items = [];
-  try{ items = await (await fetch(BK+'/api/chats')).json(); }catch{}
+  try{ items = await (await fetch(BK+'/api/chats'+(q?'?q='+encodeURIComponent(q):''))).json(); }catch{}
   const el = $('chatList'); el.innerHTML='';
   if(!items.length){ el.innerHTML = `<div class="listEmpty">${t('chatListEmpty')}</div>`; return; }
   for(const it of items){
     const d = document.createElement('div');
     d.className = 'chatItem' + (it.id===chatId?' active':'');
     d.innerHTML = `<div class="info"><div class="t"></div><div class="d">#${it.id} · ${fmtTime(it.updated)}</div></div>
-      <button class="del" title="${t('delTip')}">🗑</button>`;
+      <button class="del exp" title="${t('exportTip')}">⬇</button>
+      <button class="del rm" title="${t('delTip')}">🗑</button>`;
+    d.querySelector('.exp').onclick = e=>{
+      e.stopPropagation();
+      window.open(BK+'/api/chats/'+it.id+'/export', '_blank');
+    };
     d.querySelector('.t').textContent = it.title || it.id;
     d.title = busy ? t('busyTip') : '';
     d.onclick = () => {
       if(busy){ window.open('?chat='+it.id, '_blank', 'width=1280,height=820'); return; }   // 生成中 → 新視窗開啟
       loadChat(it.id);
     };
-    d.querySelector('.del').onclick = async e => {
+    d.querySelector('.rm').onclick = async e => {
       e.stopPropagation();
       if(!confirm(t('confirmDel')+it.id+'?')) return;
       try{ await fetch(BK+'/api/chats/'+it.id, {method:'DELETE'}); }catch{}
@@ -1279,6 +1433,8 @@ $('newChat').onclick = () => {
 };
 applySettings();
 applyLang();
+renderThemes();
+applyTheme();
 refreshChatList();
 /* ?chat=編號 → 直接開啟該對話(供生成中開新視窗用) */
 const urlChat = new URLSearchParams(location.search).get('chat');

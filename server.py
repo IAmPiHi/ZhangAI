@@ -40,8 +40,25 @@ PORT = 8080          # web UI + API (main page)
 LLAMA_PORT = 8090    # llama-server (child process, no web UI)
 
 
-def launch_llama():
-    """Spawn llama-server as a child process; its logs share this terminal."""
+LLAMA_PROC = {"proc": None, "model": ""}
+
+
+def _stop_llama():
+    p = LLAMA_PROC.get("proc")
+    if p is not None and p.poll() is None:
+        print("  [llama] stopping engine...")
+        p.terminate()
+        try:
+            p.wait(timeout=30)
+        except Exception:
+            p.kill()
+
+
+atexit.register(_stop_llama)
+
+
+def launch_llama(model_path=None):
+    """(Re)spawn llama-server as a child process; its logs share this terminal."""
     exe = os.environ.get("ZHANGAI_LLAMA", "")
     if not exe:
         for cand in (ROOT / "llama" / "llama-server.exe", ROOT / "llama" / "llama-server"):
@@ -51,12 +68,13 @@ def launch_llama():
     if not exe or not Path(exe).exists():
         print("  [llama] engine not found in llama/ - skipping launch (cloud providers still work)")
         return None
-    model = os.environ.get("ZHANGAI_MODEL", str(ROOT / "model" / "main.gguf"))
+    model = model_path or os.environ.get("ZHANGAI_MODEL", str(ROOT / "model" / "main.gguf"))
     if not Path(model).exists():
         print(f"  [llama] model not found: {model} - skipping launch")
         return None
+    _stop_llama()
     mmproj = os.environ.get("ZHANGAI_MMPROJ", str(ROOT / "model" / "mmproj.gguf"))
-    args = [exe, "-m", model,
+    args = [exe, "-m", str(model),
             "-c", os.environ.get("ZHANGAI_CTX", "8192"),
             "-ngl", os.environ.get("ZHANGAI_NGL", "99"),
             "--port", str(LLAMA_PORT), "--host", "127.0.0.1", "--no-webui"]
@@ -66,8 +84,12 @@ def launch_llama():
     if extra:
         args += extra.split()
     print("  [llama] launching:", " ".join(args))
-    proc = subprocess.Popen(args)   # inherits stdout/stderr -> single terminal
-    atexit.register(lambda: proc.poll() is None and proc.terminate())
+    try:
+        proc = subprocess.Popen(args)   # inherits stdout/stderr -> single terminal
+    except Exception as e:
+        print(f"  [llama] failed to launch engine: {e}")
+        return None
+    LLAMA_PROC.update(proc=proc, model=str(model))
     return proc
 
 
@@ -92,13 +114,22 @@ def load_skills():
     return out
 
 
-SKILLS = load_skills()
-SKILL_MAP = {s["name"]: s for s in SKILLS}
+SKILLS = []
+SKILL_MAP = {}
 
-# skills/skills.json 清單檔(AI 與前端直接讀這份)
-(SKILLS_DIR / "skills.json").write_text(
-    json.dumps([{k: s[k] for k in ("file", "name", "desc", "params")} for s in SKILLS],
-               ensure_ascii=False, indent=2), encoding="utf-8")
+
+def reload_skills():
+    """(Re)load skills/*.py and rewrite the manifest. Hot-reload friendly."""
+    global SKILLS, SKILL_MAP
+    SKILLS = load_skills()
+    SKILL_MAP = {s["name"]: s for s in SKILLS}
+    (SKILLS_DIR / "skills.json").write_text(
+        json.dumps([{k: s[k] for k in ("file", "name", "desc", "params")} for s in SKILLS],
+                   ensure_ascii=False, indent=2), encoding="utf-8")
+    return len(SKILLS)
+
+
+reload_skills()
 
 # ════ 使用者記憶 memory.json ════
 MEM_FILE = ROOT / "memory.json"
@@ -410,18 +441,66 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
-        if self.path == "/api/chats":
+        path_only = self.path.split("?")[0]
+
+        if path_only == "/api/chats":
+            q = urllib.parse.parse_qs(
+                urllib.parse.urlparse(self.path).query).get("q", [""])[0].lower()
             items = []
             for p in sorted(CHATS_DIR.iterdir(), reverse=True):
                 f = p / "chat.json"
                 if p.is_dir() and p.name.isdigit() and f.exists():
                     try:
-                        d = json.loads(f.read_text(encoding="utf-8"))
+                        raw = f.read_text(encoding="utf-8")
+                        d = json.loads(raw)
+                        if q and q not in raw.lower():   # full-text filter
+                            continue
                         items.append({"id": p.name, "title": d.get("title", p.name),
                                       "updated": d.get("updated", "")})
                     except Exception:
-                        items.append({"id": p.name, "title": p.name, "updated": ""})
+                        if not q:
+                            items.append({"id": p.name, "title": p.name, "updated": ""})
             return self.send_json(items)
+
+        # ── export one chat as Markdown ──
+        m = re.fullmatch(r"/api/chats/(\d{1,6})/export", path_only)
+        if m:
+            f = chat_file(m.group(1))
+            if not f.exists():
+                return self.send_json({"error": "not found"}, 404)
+            d = json.loads(f.read_text(encoding="utf-8"))
+            lines = [f"# {d.get('title','Chat')}", "",
+                     f"*Exported from ZHANGAI · {d.get('updated','')}*", ""]
+            for msg in d.get("messages", []):
+                if msg["role"] == "user":
+                    txt = msg["content"] if isinstance(msg["content"], str) else \
+                        " ".join(c.get("text", "[image]") if c.get("type") == "text"
+                                 else "[image]" for c in msg["content"])
+                    if isinstance(txt, str) and txt.startswith("[工具結果]"):
+                        lines += ["> 🛠 Tool result:", "> " + txt[6:].strip().replace("\n", "\n> "), ""]
+                    else:
+                        lines += ["### 🧑 User", "", txt, ""]
+                else:
+                    lines += ["### 🤖 ZHANGAI", "", str(msg.get("content", "")), ""]
+            body = "\n".join(lines).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/markdown; charset=utf-8")
+            self.send_header("Content-Disposition",
+                             f"attachment; filename=zhangai-chat-{m.group(1)}.md")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        # ── list available GGUF models ──
+        if path_only == "/api/models":
+            out = []
+            for p in sorted((ROOT / "model").glob("*.gguf")):
+                if p.name.lower().startswith("mmproj"):
+                    continue
+                out.append({"name": p.name, "size": p.stat().st_size,
+                            "current": str(p) == LLAMA_PROC.get("model")})
+            return self.send_json(out)
 
         if self.path == "/api/skills":
             try:
@@ -555,9 +634,70 @@ class Handler(BaseHTTPRequestHandler):
             if not s:
                 return self.send_json({"ok": False, "text": f"unknown tool: {name}"})
             try:
+                import _common                      # shared sandbox flag
+                _common.ALLOW_ABS = bool(body.get("allow_abs"))
+            except Exception:
+                pass
+            try:
                 return self.send_json(s["fn"](args))
             except Exception as e:
                 return self.send_json({"ok": False, "text": f"tool error: {e}"})
+
+        if self.path == "/api/skills/reload":
+            try:
+                n = reload_skills()
+                return self.send_json({"ok": True, "count": n})
+            except Exception as e:
+                return self.send_json({"ok": False, "error": str(e)}, 500)
+
+        if self.path == "/api/engine/restart":
+            body = self.read_body()
+            name = body.get("model", "")
+            target = (ROOT / "model" / name) if name else None
+            if target and (".." in name or not target.is_file()):
+                return self.send_json({"ok": False, "error": "model not found"}, 404)
+            proc = launch_llama(str(target) if target else None)
+            return self.send_json({"ok": proc is not None,
+                                   "model": Path(LLAMA_PROC.get("model", "")).name})
+
+        if self.path == "/api/memory/consolidate":
+            b = self.read_body()
+            mem = read_mem()
+            if len(mem["facts"]) < 2:
+                return self.send_json({"ok": True, "before": len(mem["facts"]),
+                                       "after": len(mem["facts"])})
+            lang = b.get("lang", "zh")
+            facts_txt = "\n".join("- " + f["text"] for f in mem["facts"])
+            if lang == "en":
+                sys_p = ("You are a memory curator. Merge and deduplicate the user facts below "
+                         "into a concise list, keeping ALL distinct information. One per line, "
+                         "each starting with '- User'. Output the list only.")
+                u_p = facts_txt + ("\n\nOutput the consolidated list." +
+                                   (" /no_think" if b.get("provider", "local") == "local" else ""))
+            else:
+                sys_p = ("你是記憶整理器。把以下使用者資料合併去重、彙整為精簡清單,"
+                         "保留所有不重複的資訊。每行一條,以「- 使用者」開頭。只輸出清單。")
+                u_p = facts_txt + ("\n\n請輸出整理後的清單。" +
+                                   (" /no_think" if b.get("provider", "local") == "local" else ""))
+            try:
+                extra = ({"chat_template_kwargs": {"enable_thinking": False}}
+                         if b.get("provider", "local") == "local" else None)
+                msg = llm_once(b.get("provider", "local"), b.get("api_key", ""),
+                               b.get("model", ""),
+                               [{"role": "system", "content": sys_p},
+                                {"role": "user", "content": u_p}],
+                               max_tokens=1500, extra=extra)
+                content = re.sub(r"<think>.*?</think>", " ", msg.get("content") or "", flags=re.S)
+                new_facts = [m2.group(1).strip() for m2 in re.finditer(FACT_PAT, content, re.M)]
+                if not new_facts:
+                    return self.send_json({"ok": False, "error": "model returned no usable list"})
+                before = len(mem["facts"])
+                write_mem({"facts": [{"text": f2, "time": time.strftime("%Y-%m-%d %H:%M")}
+                                     for f2 in new_facts]})
+                print(f"  [memory] consolidated {before} -> {len(new_facts)}")
+                return self.send_json({"ok": True, "before": before, "after": len(new_facts)})
+            except Exception as e:
+                return self.send_json({"ok": False, "error": str(e)})
 
         self.send_json({"error": "bad route"}, 404)
 
@@ -574,6 +714,16 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/memory":
             write_mem({"facts": []})
             return self.send_json({"ok": True})
+        m = re.fullmatch(r"/api/memory/(\d+)", self.path)
+        if m:
+            mem = read_mem()
+            i = int(m.group(1))
+            if 0 <= i < len(mem["facts"]):
+                removed = mem["facts"].pop(i)
+                write_mem(mem)
+                print("  [memory] deleted:", removed["text"][:60])
+                return self.send_json({"ok": True})
+            return self.send_json({"ok": False, "error": "bad index"}, 404)
         cid = self.match_chat()
         if cid and (CHATS_DIR / cid).exists():
             shutil.rmtree(CHATS_DIR / cid, ignore_errors=True)

@@ -5,7 +5,7 @@
 > 一個介面更酷的本地 LLM 主控台 — 類 Ollama,但內建視覺辨識、工具調用、多 AI 辯論、網路搜尋與長期記憶。
 > 純 llama.cpp + Python 標準庫 + 單檔前端,無框架、無資料庫、零雲端依賴。
 
-![main](docs/main.png)
+![mainGIF](docs/DEMO.gif)
 
 ## ✨ 特色
 
@@ -103,4 +103,8 @@ def run(args):
 
 ## 📄 授權
 
-[ZNC-1.0](LICENSE) — **非商業**使用免費;可拷貝、可修改、可再散布,但必須在前端介面可見處保留原作者署名 **Chris Zhang**,且修
+[ZNC-1.0](LICENSE) — **非商業**使用免費;可拷貝、可修改、可再散布,但必須在前端介面可見處保留原作者署名 **Chris Zhang**,且修改版需採用相同授權。商業使用請聯繫作者。
+
+---
+
+<p align="center">by <b>Chris Zhang</b> © 2026 · All Rights Reserved</p>

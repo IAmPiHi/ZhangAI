@@ -5,7 +5,7 @@ English | **[繁體中文](README.zh-TW.md)**
 > A local LLM console with a cooler interface — like Ollama, but with built-in vision, tool calling, multi-AI debate, web search, and long-term memory.
 > Pure llama.cpp + Python standard library + a single-file frontend. No frameworks, no database, zero cloud dependencies.
 
-![main](docs/main.png)
+![mainGIF](docs/DEMO.gif)
 
 ## ✨ Features
 
@@ -105,4 +105,8 @@ def run(args):
 
 ## 📄 License
 
-[ZNC-1.0](LICENSE) — free for **non-commercial** use; copy, modify, and redistribute freely, but the original author credit **Chris Zhang** must remain visible in the front-end UI, and modified versions must keep this 
+[ZNC-1.0](LICENSE) — free for **non-commercial** use; copy, modify, and redistribute freely, but the original author credit **Chris Zhang** must remain visible in the front-end UI, and modified versions must keep this license. Contact the author for commercial licensing.
+
+---
+
+<p align="center">by <b>Chris Zhang</b> © 2026 · All Rights Reserved</p>
