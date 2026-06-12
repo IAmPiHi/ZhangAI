@@ -16,4 +16,4 @@ def run(args):
         val = eval(expr, {"__builtins__": {}}, allowed)
         return {"ok": True, "text": f"{expr} = {val}"}
     except Exception as e:
-        return {"ok": False, "text": f"calculation f
+        return {"ok": False, "text": f"calculation failed: {e}"}

@@ -38,4 +38,4 @@ def run(args):
         z.writestr("[Content_Types].xml", ctypes)
         z.writestr("_rels/.rels", rels)
         z.writestr("word/document.xml", doc)
-    return {"ok": True, "text": f"Word documen
+    return {"ok": True, "text": f"Word document created: {p}"}

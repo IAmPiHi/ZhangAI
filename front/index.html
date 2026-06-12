@@ -400,6 +400,7 @@ zh:{
   phase1:'⚡ ROUND 1 — 四方觀點生成中', phaseFinal:'⚖ FINAL — 主持人總結裁決',
   thinkSum:'(思考摘要)', noView:'(無觀點)',
   prevConv:'先前對話:', qLabel:'問題:', uLabel:'使用者:', aLabel:'AI:',
+  debateLog:'🧠 辯論紀錄',
   memInject:'【系統記憶】以下是過往累積的使用者背景資料,僅供你回答時參考。切勿在回覆中列出、複述或提及這份清單:\n',
   skillSys1:'你可以呼叫本地工具。需要使用工具時,只輸出一行 JSON,不要加任何其他文字:\n{"skill":"工具名","args":{"參數":"值"}}\n可用工具:\n',
   skillSys2:'\n系統執行後會以「[工具結果]」訊息回傳,你再根據結果繼續呼叫工具或用自然語言給最終回答。若不需要工具,直接正常回答。',
@@ -458,6 +459,7 @@ en:{
   phase1:'⚡ ROUND 1 — Generating four perspectives', phaseFinal:'⚖ FINAL — Moderator verdict',
   thinkSum:'(reasoning summary)', noView:'(no view)',
   prevConv:'Previous conversation:', qLabel:'Question: ', uLabel:'User: ', aLabel:'AI: ',
+  debateLog:'🧠 Debate transcript',
   memInject:'[System memory] Background facts about the user from past chats. Reference only — never list, repeat, or mention this list in replies:\n',
   skillSys1:'You can call local tools. When you need one, output exactly one line of JSON and nothing else:\n{"skill":"tool_name","args":{"param":"value"}}\nAvailable tools:\n',
   skillSys2:'\nThe system will reply with a "[工具結果]" message containing the result; then either call another tool or give the final answer in natural language. If no tool is needed, just answer normally.',
@@ -668,6 +670,7 @@ function setBusy(b){
 }
 
 /* ════ 訊息編輯 / 重送 / 重新生成 ════ */
+const MODE_TAGS = {skill:'⚙ SKILL MODE', think:'🧠 SUPER THINK', search:'🔍 WEB SEARCH'};
 const emptyHtml = () => `<div class="empty" id="emptyHint">${t('emptyHint')}</div>`;
 function addTools(bubble, idx){
   const m = messages[idx];
@@ -710,20 +713,22 @@ function editMsg(idx, bubble){
 function resendFrom(idx){          // 截斷到該則使用者訊息,重新生成後續
   if(busy) return;
   messages = messages.slice(0, idx+1);
-  // 編輯時打了 /think 或 /skill 指令 → 一樣要執行
   const m = messages[idx];
   let txt = typeof m.content==='string' ? m.content : (m.content.find(c=>c.type==='text')?.text || '');
-  const skillMode = /^\/skill\b/i.test(txt), thinkMode = /^\/think\b/i.test(txt),
-        searchMode = /^\/search\b/i.test(txt);
-  if(skillMode || thinkMode || searchMode){
+  // 編輯時打了新指令 → 覆寫模式;否則沿用訊息上保存的 mode
+  const pm = txt.match(/^\/(skill|think|search)\s*/i);
+  if(pm){
+    m.mode = pm[1].toLowerCase();
     txt = txt.replace(/^\/(skill|think|search)\s*/i,'');
     if(typeof m.content==='string') m.content = txt;
-    else { const t = m.content.find(c=>c.type==='text'); if(t) t.text = txt; }
+    else { const tn = m.content.find(c=>c.type==='text'); if(tn) tn.text = txt; }
   }
+  const mode = m.mode;
+  if(mode==='search') delete m.search;   // 重送會重新搜尋
   renderAll();
-  if(thinkMode) runThinkTurn(txt);
-  else if(searchMode) runSearchTurn(txt);
-  else runTurn(skillMode);
+  if(mode==='think') runThinkTurn(txt);
+  else if(mode==='search') runSearchTurn(txt);
+  else runTurn(mode==='skill');
 }
 function regenFrom(idx){           // 移除該則 AI 回覆與其後內容,重新生成
   if(busy) return;
@@ -743,9 +748,17 @@ function renderAll(){
           esc(m.content.replace(/^\[工具結果\]\s*/,'').slice(0,1500))}</div></div>`;
         return;
       }
-      const html = typeof m.content==='string' ? md(m.content)
-        : m.content.map(c=>c.type==='image_url'?`<img src="${c.image_url.url}">`:md(c.text||'')).join('');
+      const tag = MODE_TAGS[m.mode] || '';
+      const html = (tag?`<div style="font-size:10px;color:var(--neon3);letter-spacing:.15em;margin-bottom:4px">${tag}</div>`:'')
+        + (typeof m.content==='string' ? md(m.content)
+        : m.content.map(c=>c.type==='image_url'?`<img src="${c.image_url.url}">`:md(c.text||'')).join(''));
       addTools(addMsg('user', html), i);
+      // 還原搜尋結果卡片
+      if(m.search?.length){
+        const list = m.search.map((r,j)=>
+          `[${j+1}] <a href="${r.url}" target="_blank">${esc(r.title||'')}</a>${r.read?` <span style="color:var(--neon5)">${t('contentRead')}</span>`:''}<br><span style="color:var(--dim)">${esc(r.snippet||'')}</span>`).join('<br>');
+        addMsg('assistant', `<div class="skillCall" style="margin-top:0">${t('searchTitle')} <span class="args">${esc(typeof m.content==='string'?m.content.slice(0,60):'')}</span><div class="skRes">${list}</div></div>`);
+      }
     } else {
       const b = addMsg('assistant','');
       // 工具呼叫 JSON → 顯示為呼叫卡片而非原始 JSON
@@ -756,6 +769,9 @@ function renderAll(){
           `<div class="skillCall">🛠 ${esc(call.skill)} <span class="args">${esc(JSON.stringify(call.args||{}))}</span></div>`);
       } else {
         renderAssistant(b, m.reasoning||'', m.content||'', false);
+        // 還原辯論紀錄(收合)
+        if(m.debate) b.insertAdjacentHTML('afterbegin',
+          `<details class="think"><summary>${t('debateLog')}</summary><div class="tbody">${esc(m.debate)}</div></details>`);
         addTools(b, i);
       }
     }
@@ -948,8 +964,9 @@ async function send(){
   const thinkMode = /^\/think\b/i.test(text);
   const searchMode = /^\/search\b/i.test(text);
   if(skillMode || thinkMode || searchMode) text = text.replace(/^\/(skill|think|search)\s*/i,'');
+  const mode = skillMode ? 'skill' : thinkMode ? 'think' : searchMode ? 'search' : undefined;
 
-  const tag = skillMode ? '⚙ SKILL MODE' : thinkMode ? '🧠 SUPER THINK' : searchMode ? '🔍 WEB SEARCH' : '';
+  const tag = MODE_TAGS[mode] || '';
   const uBubble = addMsg('user', (tag?`<div style="font-size:10px;color:var(--neon3);letter-spacing:.15em;margin-bottom:4px">${tag}</div>`:'')
     + images.map(u=>`<img src="${u}">`).join('') + md(text));
   let content;
@@ -957,7 +974,7 @@ async function send(){
     content = images.map(u=>({type:'image_url', image_url:{url:u}}));
     content.push({type:'text', text: text || t('describeImg')});
   } else content = text;
-  messages.push({role:'user', content});
+  messages.push({role:'user', content, mode});   // mode 持久化,重繪/重送可還原
   addTools(uBubble, messages.length-1);
   images = []; renderPreviews();
 
@@ -967,6 +984,12 @@ async function send(){
 }
 
 /* ════ /search 網路搜尋回合 ════ */
+function persistSearch(results){   // 把搜尋結果存進觸發的使用者訊息,供重繪還原
+  const uMsg = [...messages].reverse().find(m=>m.role==='user');
+  if(uMsg) uMsg.search = results.map(r=>({
+    title:(r.title||'').slice(0,120), url:r.url,
+    snippet:(r.snippet||'').slice(0,160), read: !!r.content}));
+}
 async function runSearchTurn(text){
   setBusy(true); statReset();
   const card = addMsg('ai','');
@@ -983,6 +1006,7 @@ async function runSearchTurn(text){
       `[${i+1}] <a href="${r.url}" target="_blank">${esc(r.title)}</a>${r.content?` <span style="color:var(--neon5)">${t('contentRead')}</span>`:''}<br><span style="color:var(--dim)">${esc((r.snippet||'').slice(0,160))}</span>`).join('<br>');
   }
   $('chat').scrollTop = $('chat').scrollHeight;
+  persistSearch(results);
   let ctx = results.map((r,i)=>`[${i+1}] ${r.title}\n${r.url}\n${t('snippetLb')}${r.snippet||''}`).join('\n\n');
   if(!results.length){ await runTurn(false, ''); return; }
 
@@ -1034,6 +1058,7 @@ async function runSearchTurn(text){
   resEl.insertAdjacentHTML('beforeend', got.length
     ? `<br><span style="color:var(--neon5)">${t('gotRead1')}${got.join(', ')}${t('gotRead2')}</span>`
     : `<br><span style="color:var(--dim)">${t('readFailFb')}</span>`);
+  persistSearch(results);   // 更新已讀內文標記
   $('chat').scrollTop = $('chat').scrollHeight;
   ctx = results.map((r,i)=>`[${i+1}] ${r.title}\n${r.url}\n${t('snippetLb')}${r.snippet||''}`
     + (r.content ? '\n'+t('contentLb')+r.content : '')).join('\n\n');
@@ -1256,4 +1281,8 @@ applySettings();
 applyLang();
 refreshChatList();
 /* ?chat=編號 → 直接開啟該對話(供生成中開新視窗用) */
-c
+const urlChat = new URLSearchParams(location.search).get('chat');
+if(urlChat) loadChat(urlChat);
+</script>
+</body>
+</html>

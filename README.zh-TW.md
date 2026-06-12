@@ -99,4 +99,8 @@ def run(args):
 
 ## 📄 授權
 
-[ZNC-1.0](LICENSE) — **非商業**使用免費
+[ZNC-1.0](LICENSE) — **非商業**使用免費;可拷貝、可修改、可再散布,但必須在前端介面可見處保留原作者署名 **Chris Zhang**,且修改版需採用相同授權。商業使用請聯繫作者。
+
+---
+
+<p align="center">by <b>Chris Zhang</b> © 2026 · All Rights Reserved</p>

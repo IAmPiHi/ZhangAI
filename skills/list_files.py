@@ -16,4 +16,4 @@ def run(args):
     for p in sorted(folder.iterdir()):
         tag = "[DIR]" if p.is_dir() else f"{p.stat().st_size:,} B"
         rows.append(f"{p.name}\t{tag}")
-    return {"ok": True, "text": f"{folder}:\n" + ("\n".join(rows) or "(empty folder)"
+    return {"ok": True, "text": f"{folder}:\n" + ("\n".join(rows) or "(empty folder)")}
