@@ -87,9 +87,13 @@ def run(args):
 
 ## 🖼 Screenshots
 
-![main](docs/main.png)
+| `/think` — 4-AI debate | `/search` — live web search |
+|---|---|
+| ![think](docs/SUPERTHINK.png) | ![search](docs/SEARCH.png) |
 
-*(more screenshots — /think debate, /search — coming soon, see [TODO](TODO.md))*
+| Reasoning view | Settings |
+|---|---|
+| ![reasoning](docs/reasoning.png) | ![settings](docs/SETTING.png) |
 
 ## 🤝 Contributing
 
@@ -101,8 +105,4 @@ def run(args):
 
 ## 📄 License
 
-[ZNC-1.0](LICENSE) — free for **non-commercial** use; copy, modify, and redistribute freely, but the original author credit **Chris Zhang** must remain visible in the front-end UI, and modified versions must keep this license. Contact the author for commercial licensing.
-
----
-
-<p align="center">by <b>Chris Zhang</b> © 2026 · All Rights Reserved</p>
+[ZNC-1.0](LICENSE) — free for **non-commercial** use; copy, modify, and redistribute freely, but the original author credit **Chris Zhang** must remain visible in the front-end UI, and modified versions must keep this 

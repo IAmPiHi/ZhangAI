@@ -85,9 +85,13 @@ def run(args):
 
 ## 🖼 截圖
 
-![main](docs/main.png)
+| `/think` — 4 AI 辯論 | `/search` — 即時網路搜尋 |
+|---|---|
+| ![think](docs/SUPERTHINK.png) | ![search](docs/SEARCH.png) |
 
-*(更多截圖 — /think 辯論、/search 搜尋 — 即將補上,見 [TODO](TODO.md))*
+| 思考過程檢視 | 設定面板 |
+|---|---|
+| ![reasoning](docs/reasoning.png) | ![settings](docs/SETTING.png) |
 
 ## 🤝 參與貢獻
 
@@ -99,8 +103,4 @@ def run(args):
 
 ## 📄 授權
 
-[ZNC-1.0](LICENSE) — **非商業**使用免費;可拷貝、可修改、可再散布,但必須在前端介面可見處保留原作者署名 **Chris Zhang**,且修改版需採用相同授權。商業使用請聯繫作者。
-
----
-
-<p align="center">by <b>Chris Zhang</b> © 2026 · All Rights Reserved</p>
+[ZNC-1.0](LICENSE) — **非商業**使用免費;可拷貝、可修改、可再散布,但必須在前端介面可見處保留原作者署名 **Chris Zhang**,且修
